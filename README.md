@@ -3,6 +3,8 @@ SECOND detector. Based on my unofficial implementation of VoxelNet with some imp
 
 ONLY support python 3.6+, pytorch 0.4.1+. Don't support pytorch 0.4.0. Tested in Ubuntu 16.04/18.04.
 
+Feel free to contact me by issue or email if encounter any problems. I don't know whether this project is runnable in other computer.
+
 ### Performance in KITTI validation set (50/50 split)
 
 ```
