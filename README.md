@@ -188,9 +188,7 @@ output.features = SubmanifoldConvolutionFunction.apply(
 ```
 
 Then run ```python ./kittiviewer/viewer.py```, check following picture to use kitti viewer:
-![GuidePic](https://github.com/traveller59/second.pytorch/tree/master/images/simpleguide.png)
-
-
+![GuidePic](https://raw.githubusercontent.com/traveller59/second.pytorch/master/images/simpleguide.png)
 
 ## Usage
 
@@ -219,7 +217,7 @@ You can download pretrained models in [google drive](https://drive.google.com/op
 
 A kitti lidar box is consist of 7 elements: [x, y, z, w, l, h, rz], see figure.
 
-![Kitti Box Image](https://github.com/traveller59/second.pytorch/tree/master/images/kittibox.png)
+![Kitti Box Image](https://raw.githubusercontent.com/traveller59/second.pytorch/master/images/kittibox.png)
 
 All training and inference code use kitti box format. So we need to convert other format to KITTI format before training.
 
