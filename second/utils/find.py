@@ -84,7 +84,7 @@ def find_cuda_device_arch():
             source = """
             #include <cuda_runtime.h>
             #include <iostream>
-            void main(){
+            int main(){
                 int nDevices;
                 cudaGetDeviceCount(&nDevices);
                 for (int i = 0; i < nDevices; i++) {
@@ -92,6 +92,7 @@ def find_cuda_device_arch():
                     cudaGetDeviceProperties(&prop, i);
                     std::cout << prop.major << "." << prop.minor << std::endl;
                 }
+                return 0;
             }
             """
             with tempfile.NamedTemporaryFile('w', suffix='.cc') as f:
