@@ -5,7 +5,7 @@ ONLY support python 3.6+, pytorch 0.4.1+. Don't support pytorch 0.4.0. Tested in
 
 Feel free to contact me by issue or email if encounter any problems. I don't know whether this project is runnable in other computer.
 
-### Performance in KITTI validation set (50/50 split)
+### Performance in KITTI validation set (50/50 split, people have problems, need to be tuned.)
 
 ```
 Car AP@0.70, 0.70, 0.70:
@@ -18,26 +18,6 @@ bbox AP:90.80, 88.97, 87.52
 bev  AP:90.85, 90.02, 89.36
 3d   AP:90.85, 89.86, 89.05
 aos  AP:90.68, 88.39, 86.57
-Cyclist AP@0.50, 0.50, 0.50:
-bbox AP:95.99, 88.46, 87.92
-bev  AP:88.59, 86.03, 85.07
-3d   AP:88.36, 85.66, 84.51
-aos  AP:95.71, 88.10, 87.53
-Cyclist AP@0.50, 0.25, 0.25:
-bbox AP:95.99, 88.46, 87.92
-bev  AP:94.99, 87.04, 86.47
-3d   AP:94.99, 86.91, 86.41
-aos  AP:95.71, 88.10, 87.53
-Pedestrian AP@0.50, 0.50, 0.50:
-bbox AP:76.07, 67.04, 65.92
-bev  AP:74.21, 65.67, 64.24
-3d   AP:72.48, 63.89, 57.80
-aos  AP:70.14, 61.55, 60.53
-Pedestrian AP@0.50, 0.25, 0.25:
-bbox AP:76.07, 67.04, 65.92
-bev  AP:85.00, 75.40, 68.27
-3d   AP:85.00, 69.65, 68.26
-aos  AP:70.14, 61.55, 60.53
 ```
 
 ## Install
@@ -145,6 +125,32 @@ eval_input_reader: {
 }
 ```
 
+## Usage
+
+### train
+
+```bash
+python ./pytorch/train.py train --config_path=./configs/car.config --model_dir=/path/to/model_dir
+```
+
+* Make sure "/path/to/model_dir" doesn't exist if you want to train new model. A new directory will be created if the model_dir doesn't exist, otherwise will read checkpoints in it.
+
+* training process use batchsize=3 as default for 1080Ti, you need to reduce batchsize if your GPU has less memory.
+
+* Currently only support single GPU training, but train a model only needs 20 hours (165 epoch) in a single 1080Ti and only needs 40 epoch to reach 74 AP in car moderate 3D in Kitti validation dateset.
+
+### evaluate
+
+```bash
+python ./pytorch/train.py evaluate --config_path=./configs/car.config --model_dir=/path/to/model_dir
+```
+
+* detection result will saved as a result.pkl file in model_dir/eval_results/step_xxx or save as official KITTI label format if you use --pickle_result=False.
+
+### pretrained model
+
+You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The car model is related to car.config and the people model is related to people.config.
+
 ## Try Kitti Viewer (Unstable)
 
 You should use kitti viewer based on pyqt and pyqtgraph to check data before training.
@@ -192,25 +198,6 @@ output.features = SubmanifoldConvolutionFunction.apply(
 Then run ```python ./kittiviewer/viewer.py```, check following picture to use kitti viewer:
 ![GuidePic](https://raw.githubusercontent.com/traveller59/second.pytorch/master/images/simpleguide.png)
 
-## Usage
-
-* train
-
-```bash
-python ./pytorch/train.py train --config_path=./configs/car.config --model_dir=/path/to/model_dir
-```
-
-Make sure "/path/to/model_dir" doesn't exist if you want to train new model. A new directory will be created if the model_dir doesn't exist, otherwise will read checkpoints in it.
-
-* evaluate
-
-```bash
-python ./pytorch/train.py evaluate --config_path=./configs/car.config --model_dir=/path/to/model_dir
-```
-
-* pretrained model
-
-You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The car model is related to car.config and the people model is related to people.config.
 
 ## Concepts
 
