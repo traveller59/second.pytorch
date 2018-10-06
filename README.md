@@ -149,13 +149,7 @@ python ./pytorch/train.py evaluate --config_path=./configs/car.config --model_di
 
 ### pretrained model
 
-You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The car model is related to car.config and the people model is related to people.config.
-
-## Try Kitti Viewer (Unstable)
-
-You should use kitti viewer based on pyqt and pyqtgraph to check data before training.
-
-Before using kitti viewer, you need to modify some file in SparseConvNet because the pretrained model doesn't support SparseConvNet master:
+Before using pretrained model, you need to modify some file in SparseConvNet because the pretrained model doesn't support SparseConvNet master:
 
 * convolution.py
 ```Python
@@ -195,7 +189,13 @@ output.features = SubmanifoldConvolutionFunction.apply(
     self.weight.view(self.filter_volume, self.nIn, self.nOut),
 ```
 
-Then run ```python ./kittiviewer/viewer.py```, check following picture to use kitti viewer:
+You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The car model is related to car.config and the people model is related to people.config.
+
+## Try Kitti Viewer (Unstable)
+
+You should use kitti viewer based on pyqt and pyqtgraph to check data before training.
+
+run ```python ./kittiviewer/viewer.py```, check following picture to use kitti viewer:
 ![GuidePic](https://raw.githubusercontent.com/traveller59/second.pytorch/master/images/simpleguide.png)
 
 
