@@ -198,6 +198,11 @@ You should use kitti viewer based on pyqt and pyqtgraph to check data before tra
 run ```python ./kittiviewer/viewer.py```, check following picture to use kitti viewer:
 ![GuidePic](https://raw.githubusercontent.com/traveller59/second.pytorch/master/images/simpleguide.png)
 
+## TODO
+
+- [ ] add unit tests (2018.10~2018.11).
+- [ ] add a self-hosted CI (2018.10~2018.12).
+- [ ] replace pyqtgraph with modernGL or other draw tools (2018.11~2019.1).
 
 ## Concepts
 
