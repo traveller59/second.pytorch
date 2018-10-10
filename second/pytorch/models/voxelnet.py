@@ -869,7 +869,7 @@ class VoxelNet(nn.Module):
                     top_scores, top_labels = torch.max(total_scores, dim=-1)
 
                 if self._nms_score_threshold > 0.0:
-                    thresh = torch.Tensor(
+                    thresh = torch.tensor(
                         [self._nms_score_threshold],
                         device=total_scores.device).type_as(total_scores)
                     top_scores_keep = (top_scores >= thresh)
