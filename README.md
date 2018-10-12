@@ -189,7 +189,7 @@ output.features = SubmanifoldConvolutionFunction.apply(
     self.weight.view(self.filter_volume, self.nIn, self.nOut),
 ```
 
-You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The car model is related to car.config and the people model is related to people.config.
+You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The car model is corresponding to car.config, the car_tiny model is corresponding to car.tiny.config and the people model is corresponding to people.config.
 
 ## Try Kitti Viewer (Unstable)
 
