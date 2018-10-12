@@ -8,7 +8,6 @@ from functools import partial
 from pathlib import Path
 
 import fire
-import tensorflow as tf
 
 from second.utils.find import find_cuda, find_cuda_device_arch
 
