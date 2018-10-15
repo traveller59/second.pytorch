@@ -22,7 +22,7 @@ class Pybind11Link(Gpp):
                  extra_lflags: str = None,
                  build_directory: str = None):
         pb11_includes = subprocess.check_output(
-            "python -m pybind11 --includes",
+            "python3 -m pybind11 --includes",
             shell=True).decode('utf8').strip("\n")
         cflags = cflags or '-fPIC -O3 '
         cflags += pb11_includes
@@ -55,7 +55,7 @@ class Pybind11CUDALink(CUDALink):
                  extra_lflags: str = None,
                  build_directory: str = None):
         pb11_includes = subprocess.check_output(
-            "python -m pybind11 --includes",
+            "python3 -m pybind11 --includes",
             shell=True).decode('utf8').strip("\n")
         cflags = cflags or '-fPIC -O3 '
         cflags += pb11_includes
