@@ -91,7 +91,7 @@ def create_target_np(all_anchors,
     gt_ids = np.empty((num_inside, ), dtype=np.int32)
     labels.fill(-1)
     gt_ids.fill(-1)
-    if len(gt_boxes) > 0:
+    if len(gt_boxes) > 0 and anchors.shape[0] > 0:
         # Compute overlaps between the anchors and the gt boxes overlaps
         anchor_by_gt_overlap = similarity_fn(anchors, gt_boxes)
         # Map from anchor to gt box that has highest overlap
