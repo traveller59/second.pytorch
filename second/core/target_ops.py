@@ -152,7 +152,7 @@ def create_target_np(all_anchors,
             labels[enable_inds] = 0
         bg_inds = np.where(labels == 0)[0]
     else:
-        if len(gt_boxes) == 0:
+        if len(gt_boxes) == 0 or anchors.shape[0] == 0:
             labels[:] = 0
         else:
             labels[bg_inds] = 0
