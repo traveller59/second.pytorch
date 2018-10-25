@@ -326,7 +326,7 @@ class MiddleExtractor(nn.Module):
 
     def forward(self, voxel_features, coors, batch_size):
         output_shape = [batch_size] + self.voxel_output_shape[1:]
-        ret = scatter_nd(coors, voxel_features, output_shape)
+        ret = scatter_nd(coors.long(), voxel_features, output_shape)
         # print('scatter_nd fw:', time.time() - t)
         ret = ret.permute(0, 4, 1, 2, 3)
         ret = self.middle_conv(ret)
