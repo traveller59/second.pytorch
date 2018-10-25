@@ -34,7 +34,7 @@ cd ./second.pytorch/second
 It is recommend to use Anaconda package manager.
 
 ```bash
-pip install shapely fire pybind11 pyqtgraph tensorboardX
+pip install shapely fire pybind11 pyqtgraph tensorboardX protobuf
 ```
 
 If you don't have Anaconda:

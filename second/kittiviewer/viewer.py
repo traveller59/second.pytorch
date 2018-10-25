@@ -987,7 +987,8 @@ class KittiViewer(QMainWindow):
         if self.kitti_info is None:
             self.error("you must load infos and choose a existing image idx first.")
             return
-
+        if self.gt_boxes is None:
+            return
         rect = self.kitti_info['calib/R0_rect']
         P2 = self.kitti_info['calib/P2']
         Trv2c = self.kitti_info['calib/Tr_velo_to_cam']
@@ -1203,6 +1204,11 @@ class KittiViewer(QMainWindow):
             
             if 'group_ids' in annos:
                 self.group_ids = annos['group_ids'][:num_obj]
+        else:
+            self.gt_boxes = None
+            self.gt_names = None
+            self.difficulty = None
+            self.group_ids = None
         if self.w_config.get("EnableSample"):
             self.sample_to_current_data()
         if self.w_config.get("EnableAugmentation"):
