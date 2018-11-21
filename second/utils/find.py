@@ -120,7 +120,26 @@ def find_cuda_device_arch():
             cmd = f"{str(device_query_path)} | grep 'CUDA Capability'"
             arch = subprocess.check_output(
                 cmd, shell=True).decode().rstrip('\r\n').split(" ")[-1]
-        arch = f"sm_{arch[0]}{arch[-1]}"
+        # assert len(arch) == 2
+        arch_list = [int(s) for s in arch.split(".")]
+        arch_int = arch_list[0] * 10 + arch_list[1]
+        find_work_arch = False
+        while arch_int > 10:
+            try:
+                res = subprocess.check_output("nvcc -arch=sm_{}".format(arch_int), shell=True,  stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError as e:
+                if "No input files specified" in e.output.decode():
+                    find_work_arch = True
+                    break
+                elif "is not defined for option 'gpu-architecture'" in e.output.decode():
+                    arch_int -= 1
+                else:
+                    raise RuntimeError("unknown error")
+        if find_work_arch:
+            arch = f"sm_{arch_int}"
+        else:
+            arch = None
+
     except Exception:
         arch = None
     return arch
@@ -176,4 +195,5 @@ def get_gpu_memory_usage():
 
 
 if __name__ == "__main__":
-    fire.Fire()
+    print(find_cuda_device_arch())
+    # fire.Fire()
