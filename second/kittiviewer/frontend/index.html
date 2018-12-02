@@ -170,11 +170,6 @@
                         response) {
                         var points_buf = str2buffer(atob(response["pointcloud"]));
                         var points = new Float32Array(points_buf);
-                        var locs = response["locs"];
-                        var dims = response["dims"];
-
-                        var rots = response["rots"];
-                        var labels = response["labels"];
                         for (var i = 0; i < self.gt_boxes.length; ++i) {
                             for (var j = self.gt_boxes[i].children.length - 1; j >= 0; j--) {
                                 self.gt_boxes[i].remove(self.gt_boxes[i].children[j]);
@@ -183,27 +178,33 @@
                             self.gt_boxes[i].geometry.dispose();
                             self.gt_boxes[i].material.dispose();
                         }
-                        self.gt_boxes = boxEdgeWithLabel(dims, locs, rots, 2,
-                            self.gtBoxColor, labels,
-                            self.gtLabelColor);
-                        for (var i = 0; i < self.gt_boxes.length; ++i) {
-                            scene.add(self.gt_boxes[i]);
+                        for (var i = 0; i < self.dt_boxes.length; ++i) {
+                            for (var j = self.dt_boxes[i].children.length - 1; j >= 0; j--) {
+                                self.dt_boxes[i].remove(self.dt_boxes[i].children[j]);
+                            }
+                            scene.remove(self.dt_boxes[i]);
+                            self.dt_boxes[i].geometry.dispose();
+                            self.dt_boxes[i].material.dispose();
+                        }
+                        if (response.hasOwnProperty("locs")) {
+                            var locs = response["locs"];
+                            var dims = response["dims"];
+                            var rots = response["rots"];
+                            var labels = response["labels"];
+                            self.gt_boxes = boxEdgeWithLabel(dims, locs, rots, 2,
+                                self.gtBoxColor, labels,
+                                self.gtLabelColor);
+                            for (var i = 0; i < self.gt_boxes.length; ++i) {
+                                scene.add(self.gt_boxes[i]);
+                            }
+
                         }
                         if (self.draw_det && response.hasOwnProperty("dt_dims")) {
-
                             var locs = response["dt_locs"];
                             var dims = response["dt_dims"];
                             var rots = response["dt_rots"];
                             var scores = response["dt_scores"];
                             console.log("draw det", dims.length);
-                            for (var i = 0; i < self.dt_boxes.length; ++i) {
-                                for (var j = self.dt_boxes[i].children.length - 1; j >= 0; j--) {
-                                    self.dt_boxes[i].remove(self.dt_boxes[i].children[j]);
-                                }
-                                scene.remove(self.dt_boxes[i]);
-                                self.dt_boxes[i].geometry.dispose();
-                                self.dt_boxes[i].material.dispose();
-                            }
                             let label_with_score = [];
                             for (var i = 0; i < locs.length; ++i) {
                                 label_with_score.push("score=" + scores[i].toFixed(2).toString());
