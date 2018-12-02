@@ -206,7 +206,7 @@ Currently there is a problem that training and evaluating in docker is very slow
 
 ## Try Kitti Viewer Web
 
-1. run ```python ./kittiviewer/backend.py --port=xxxx``` in your server/local.
+1. run ```python ./kittiviewer/backend.py main --port=xxxx``` in your server/local.
 
 2. run ```cd ./kittiviewer/frontend && python -m http.server``` to launch a local web server.
 
