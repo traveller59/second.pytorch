@@ -308,18 +308,16 @@ class MiddleExtractor(nn.Module):
             Conv3d = change_default_args(bias=True)(nn.Conv3d)
         self.voxel_output_shape = output_shape
         self.middle_conv = Sequential(
-            # ZeroPad3d(1),
-            ZeroPad3d([0, 0, 0, 0, 0, 1]),
-            Conv3d(num_input_features, 64, (3, 1, 1), stride=(2, 1, 1)),
+            ZeroPad3d(1),
+            Conv3d(num_input_features, 64, 3, stride=(2, 1, 1)),
             BatchNorm3d(64),
             nn.ReLU(),
-            # ZeroPad3d([1, 1, 1, 1, 0, 0]),
-            # Conv3d(64, 64, 3, stride=1),
-            # BatchNorm3d(64),
-            # nn.ReLU(),
-            # ZeroPad3d(1),
-            # ZeroPad3d([0, 0, 0, 0, 1, 0]),
-            Conv3d(64, 64, (3, 1, 1), stride=(2, 1, 1)),
+            ZeroPad3d([1, 1, 1, 1, 0, 0]),
+            Conv3d(64, 64, 3, stride=1),
+            BatchNorm3d(64),
+            nn.ReLU(),
+            ZeroPad3d(1),
+            Conv3d(64, 64, 3, stride=(2, 1, 1)),
             BatchNorm3d(64),
             nn.ReLU(),
         )
