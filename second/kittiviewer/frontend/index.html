@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+        crossorigin="anonymous" />
+    <title>SECOND kitti viewer</title>
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha384-tsQFqpEReu7ZLhBV2VZlAu7zcOV+rXbYlF2cqB8txI/8aZajjp4Bqd+V6D5IgvKT"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+        crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/98/three.js" integrity="sha384-BMOR44t8p+yL7NVevEC9pO2y26JB6lv1mKFhit2zvzWq5jZo6RpIcTdg6MUxKQRP"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.3/dat.gui.js" integrity="sha384-S7m8CpjFEEXwHzEDZ8XdeFSO0rLzdK8x1e7pLuc2hx5Xr23XnaWvb0p/kIez3mxy"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/5.3.0/math.js" integrity="sha384-YILGCrKtrx9ucVIp2iNy85HZcWysS6pXa+tAW+Jbgxoi3TJJSCrg0fJG5C0AJzJO"
+        crossorigin="anonymous"></script>
+    <script src="js/MapControls.js"></script>
+    <script src="js/SimplePlot.js"></script>
+    <script src="js/renderers/CSS2DRenderer.js"></script>
+    <script src="js/shaders/ConvolutionShader.js"></script>
+    <script src="js/shaders/CopyShader.js"></script>
+    <script src="js/shaders/FilmShader.js"></script>
+    <script src="js/shaders/FocusShader.js"></script>
+    <script src="js/shaders/LuminosityHighPassShader.js"></script>
+
+    <script src="js/postprocessing/EffectComposer.js"></script>
+    <script src="js/postprocessing/MaskPass.js"></script>
+    <script src="js/postprocessing/RenderPass.js"></script>
+    <script src="js/postprocessing/BloomPass.js"></script>
+    <script src="js/postprocessing/ShaderPass.js"></script>
+    <script src="js/postprocessing/FilmPass.js"></script>
+    <script src="js/postprocessing/UnrealBloomPass.js"></script>
+
+</head>
+
+<body>
+    <script type="text/javascript">
+        var scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.01);
+        var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1,
+            1000);
+        var renderer = new THREE.WebGLRenderer();
+        // renderer.setClearColor(0xeeeeee);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // container.appendChild(renderer.domElement);
+        // document.body.appendChild(renderer.domElement);
+
+        labelRenderer = new THREE.CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = 0;
+        document.body.appendChild(labelRenderer.domElement);
+        document.body.appendChild(renderer.domElement);
+        // document.addEventListener('mouseup', onDocumentMouseUp, false);
+        camera.position.set(-10, 0, 5);
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+        camera.up.set(0, 0, 1);
+        window.addEventListener('resize', onWindowResize, false);
+        controls = new THREE.MapControls(camera, labelRenderer.domElement);
+        // controls = new THREE.MapControls(camera);
+        //controls.addEventListener( 'change', render ); // call this only in static scenes (i.e., if there is no animation loop)
+        controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+        controls.dampingFactor = 0.25;
+        controls.screenSpacePanning = false;
+        controls.minDistance = 1;
+        controls.maxDistance = 30;
+        controls.maxPolarAngle = Math.PI / 2;
+        controls.target = new THREE.Vector3(0, 0, 1);
+        var renderModel = new THREE.RenderPass(scene, camera);
+        var effectBloom = new THREE.BloomPass(0.75);
+        var effectFilm = new THREE.FilmPass(0.5, 0.5, 1448, false);
+        var bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.5, 0.4,
+            0.85);
+
+        var postParams = {
+            exposure: 1,
+            bloomStrength: 1.5,
+            bloomThreshold: 0,
+            bloomRadius: 0
+        };
+        bloomPass.renderToScreen = true;
+        bloomPass.threshold = postParams.bloomThreshold;
+        bloomPass.strength = postParams.bloomStrength;
+        bloomPass.radius = postParams.bloomRadius;
+
+        effectFocus = new THREE.ShaderPass(THREE.FocusShader);
+        effectFocus.uniforms["screenWidth"].value = window.innerWidth;
+        effectFocus.uniforms["screenHeight"].value = window.innerHeight;
+        effectFocus.renderToScreen = true;
+        composer = new THREE.EffectComposer(renderer);
+        composer.addPass(renderModel);
+        // composer.addPass(effectBloom);
+        // composer.addPass(effectFilm);
+        composer.addPass(effectFocus);
+        composer.addPass(bloomPass);
+        var MAX_POINTS = 150000;
+        var vertices = new Float32Array(MAX_POINTS * 3);
+        var pointParicle = scatter(vertices, 3.5, 0x9099ba,
+            'textures/sprites/disc.png');
+        pointParicle.geometry.setDrawRange(0, 0);
+        scene.add(pointParicle);
+        // pointParicle.position.needsUpdate = true; // required after the first render
+        var KittiController = function () {
+            var self = this;
+            this.root_path = "/path/to/kitti";
+            this.info_path = "/path/to/kitti/kitti_infos_val.pkl";
+            this.det_path =
+                "/path/to/results/step_xxx/result.pkl";
+            this.backend = "127.0.0.1:16666";
+            this.draw_det = false;
+
+            this.image_idxes = [];
+            this.image_idx = 1;
+            this.gt_boxes = [];
+            this.dt_boxes = [];
+            this.gtBoxColor = "#00ff00";
+            this.dtBoxColor = "#ff0000";
+            this.gtLabelColor = "#7fff00";
+            this.dtLabelColor = "#ff7f00";
+            this.load = function () {
+                var ajax1 = getKittiInfo(self.backend, self.root_path, self.info_path, function (
+                    response) {
+                    self.image_idxes = [];
+                    for (var i = 0; i < response["image_indexes"].length; ++i)
+                        self.image_idxes.push(response["image_indexes"][i]);
+                    console.log("hello kitti info");
+                });
+            };
+            this.loadDet = function () {
+                var ajax1 = loadKittiDets(self.backend, self.det_path, function (response) {
+                    console.log("hello det");
+                });
+            };
+            this.plot = function () {
+                return this._plot(self.image_idx);
+            };
+            this.next = function () {
+                for (var i = 0; i < self.image_idxes.length; ++i) {
+                    if (self.image_idxes[i] == self.image_idx) {
+                        if (i < self.image_idxes.length) {
+                            self.image_idx = self.image_idxes[i + 1];
+                            return this.plot();
+                        }
+                    }
+                }
+            };
+            this.prev = function () {
+                for (var i = 0; i < self.image_idxes.length; ++i) {
+                    if (self.image_idxes[i] == self.image_idx) {
+                        if (i > 0) {
+                            self.image_idx = self.image_idxes[i - 1];
+                            return this.plot();
+                        }
+                    }
+                }
+            };
+            this._plot = function (image_idx) {
+                console.log(self.image_idxes.length);
+                if (self.image_idxes.length != 0 && self.image_idxes.includes(image_idx)) {
+                    var ajax2 = getPointCloud(self.backend, image_idx, self.draw_det, function (
+                        response) {
+                        var points_buf = str2buffer(atob(response["pointcloud"]));
+                        var points = new Float32Array(points_buf);
+                        var locs = response["locs"];
+                        var dims = response["dims"];
+
+                        var rots = response["rots"];
+                        var labels = response["labels"];
+                        for (var i = 0; i < self.gt_boxes.length; ++i) {
+                            for (var j = self.gt_boxes[i].children.length - 1; j >= 0; j--) {
+                                self.gt_boxes[i].remove(self.gt_boxes[i].children[j]);
+                            }
+                            scene.remove(self.gt_boxes[i]);
+                            self.gt_boxes[i].geometry.dispose();
+                            self.gt_boxes[i].material.dispose();
+                        }
+                        self.gt_boxes = boxEdgeWithLabel(dims, locs, rots, 2,
+                            self.gtBoxColor, labels,
+                            self.gtLabelColor);
+                        for (var i = 0; i < self.gt_boxes.length; ++i) {
+                            scene.add(self.gt_boxes[i]);
+                        }
+                        if (self.draw_det && response.hasOwnProperty("dt_dims")) {
+
+                            var locs = response["dt_locs"];
+                            var dims = response["dt_dims"];
+                            var rots = response["dt_rots"];
+                            var scores = response["dt_scores"];
+                            console.log("draw det", dims.length);
+                            for (var i = 0; i < self.dt_boxes.length; ++i) {
+                                for (var j = self.dt_boxes[i].children.length - 1; j >= 0; j--) {
+                                    self.dt_boxes[i].remove(self.dt_boxes[i].children[j]);
+                                }
+                                scene.remove(self.dt_boxes[i]);
+                                self.dt_boxes[i].geometry.dispose();
+                                self.dt_boxes[i].material.dispose();
+                            }
+                            let label_with_score = [];
+                            for (var i = 0; i < locs.length; ++i) {
+                                label_with_score.push("score=" + scores[i].toFixed(2).toString());
+                            }
+                            self.dt_boxes = boxEdgeWithLabel(dims, locs, rots, 2, self.dtBoxColor,
+                                label_with_score, self.dtLabelColor);
+                            for (var i = 0; i < self.dt_boxes.length; ++i) {
+                                scene.add(self.dt_boxes[i]);
+                            }
+                        }
+                        for (var i = 0; i < Math.min(points.length / 4, MAX_POINTS); i++) {
+                            pointParicle.geometry.attributes.position.array[i * 3] = points[
+                                i * 4];
+                            pointParicle.geometry.attributes.position.array[i * 3 + 1] =
+                                points[i * 4 +
+                                    1];
+                            pointParicle.geometry.attributes.position.array[i * 3 + 2] =
+                                points[i * 4 +
+                                    2];
+                        }
+                        pointParicle.geometry.setDrawRange(0, Math.min(points.length / 4,
+                            MAX_POINTS));
+                        pointParicle.geometry.attributes.position.needsUpdate = true;
+                        pointParicle.geometry.computeBoundingSphere();
+                    });
+                } else {
+                    console.log("out of range");
+                }
+            };
+        };
+        var kitti_ctrl = new KittiController();
+        var gui = new dat.GUI();
+        var coreParams = {
+            backgroundcolor: "#000000"
+        };
+        var cameraGui = gui.addFolder("core");
+        cameraGui.add(camera, "fov");
+        cameraGui.addColor(coreParams, "backgroundcolor").onChange(function (value) {
+            renderer.setClearColor(value, 1);
+        });
+        cameraGui.open();
+        var kittiGui = gui.addFolder("kitti controllers");
+        kittiGui.add(kitti_ctrl, "backend");
+        kittiGui.add(kitti_ctrl, "root_path");
+        kittiGui.add(kitti_ctrl, "info_path");
+        kittiGui.add(kitti_ctrl, "load");
+        kittiGui.add(kitti_ctrl, "det_path");
+        kittiGui.add(kitti_ctrl, "loadDet");
+        kittiGui.add(kitti_ctrl, "draw_det");
+        kittiGui.add(kitti_ctrl, "image_idx").listen();
+        var fixbugParam = {
+            image_idx: kitti_ctrl.image_idx
+        };
+        kittiGui.add(kitti_ctrl, "image_idx");
+        kittiGui.add(kitti_ctrl, "plot");
+        kittiGui.add(kitti_ctrl, "next");
+        kittiGui.add(kitti_ctrl, "prev");
+        kittiGui.open();
+        var postGui = gui.addFolder("postprocess");
+        postGui.add(postParams, 'exposure', 0.1, 2).onChange(function (value) {
+            renderer.toneMappingExposure = Math.pow(value, 4.0);
+        });
+        postGui.add(postParams, 'bloomThreshold', 0.0, 1.0).onChange(function (value) {
+            bloomPass.threshold = Number(value);
+        });
+        postGui.add(postParams, 'bloomStrength', 0.0, 3.0).onChange(function (value) {
+            bloomPass.strength = Number(value);
+        });
+        postGui.add(postParams, 'bloomRadius', 0.0, 1.0).step(0.01).onChange(function (value) {
+            bloomPass.radius = Number(value);
+        });
+
+        postGui.open();
+
+        var param = {
+            'color': pointParicle.material.color.getHex(),
+        };
+        var pointGui = gui.addFolder("points");
+        pointGui.add(pointParicle.material, 'size', 1, 10);
+        pointGui.addColor(param, 'color').onChange(function (val) {
+            pointParicle.material.color.setHex(val);
+        });;
+        pointGui.open();
+        var boxesGui = gui.addFolder("boxes");
+        boxesGui.addColor(kitti_ctrl, 'gtBoxColor');
+        boxesGui.addColor(kitti_ctrl, 'dtBoxColor');
+        boxesGui.addColor(kitti_ctrl, 'gtLabelColor');
+        boxesGui.addColor(kitti_ctrl, 'dtLabelColor');
+        boxesGui.open();
+
+        var animate = function () {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+            composer.render(0.01);
+        };
+        animate();
+        var axesHelper = new THREE.AxesHelper(2);
+        scene.add(axesHelper);
+
+        function onDocumentMouseUp(event) {
+            event.preventDefault();
+            console.log(camera.position);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+
+
+</body>
+
+</html>

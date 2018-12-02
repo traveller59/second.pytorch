@@ -32,7 +32,7 @@ cd ./second.pytorch/second
 It is recommend to use Anaconda package manager.
 
 ```bash
-pip install shapely fire pybind11 pyqtgraph tensorboardX protobuf
+pip install shapely fire pybind11 tensorboardX protobuf scikit-image numba pillow
 ```
 
 If you don't have Anaconda:
@@ -204,7 +204,23 @@ python ./pytorch/train.py evaluate --config_path=./configs/car.config --model_di
 
 Currently there is a problem that training and evaluating in docker is very slow.
 
-## Try Kitti Viewer (Unstable)
+## Try Kitti Viewer Web
+
+1. run ```python ./kittiviewer/backend.py --port=xxxx``` in your server/local.
+
+2. run ```cd ./kittiviewer/frontend && python -m http.server``` to launch a local web server.
+
+3. open your browser and enter http://127.0.0.1:8000.
+
+4. input backend (http://your_server:your_backend_port)
+
+5. input root path, info path and det path (optional)
+
+6. click load, loadDet (optional), then click plot.
+
+![GuidePic](https://raw.githubusercontent.com/traveller59/second.pytorch/master/images/viewerweb.png)
+
+## Try Kitti Viewer (Deprecated)
 
 You should use kitti viewer based on pyqt and pyqtgraph to check data before training.
 

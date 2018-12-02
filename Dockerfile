@@ -74,8 +74,8 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
 
 RUN PIP_INSTALL="python -m pip --no-cache-dir install --upgrade" && \
     $PIP_INSTALL \
-        shapely fire pybind11 pyqtgraph tensorboardX protobuf \
-        pyopengl pyqt5 matplotlib scikit-image numba pillow
+        shapely fire pybind11 tensorboardX protobuf \
+        scikit-image numba pillow
 
 WORKDIR /root
 RUN wget https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz
