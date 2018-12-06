@@ -62,6 +62,30 @@ function boxEdgeWithLabel(dims, locs, rots, edgewidth, color, labels, lcolor) {
     return boxes;
 }
 
+function boxEdgeWithLabelV2(dims, locs, rots, edgewidth, color, labels, lcolor) {
+    let boxes = [];
+    for (var i = 0; i < dims.length; ++i) {
+        let cube = new THREE.BoxGeometry(dims[i][0], dims[i][1], dims[i][2]);
+        var edgeGeo = new THREE.EdgesGeometry(cube);
+        let material = new THREE.LineBasicMaterial({
+            color: color,
+            linewidth: edgewidth
+        });
+        let edges = new THREE.LineSegments(edgeGeo, material);
+        edges.position.set(locs[i][0], locs[i][1], locs[i][2]);
+        edges.rotation.set(rots[i][0], rots[i][1], rots[i][2]);
+        let labelObj = makeTextSprite(labels[i], {
+            fontcolor: lcolor
+        });
+        labelObj.position.set(0, 0, dims[i][2] / 2);
+        // labelObj.position.normalize();
+        labelObj.scale.set(2, 1, 1.0);
+        edges.add(labelObj);
+        boxes.push(edges);
+    }
+    return boxes;
+}
+
 function box3D(dims, pos, rots, color, alpha) {
     let boxes = [];
     for (var i = 0; i < dims.length; ++i) {
@@ -138,3 +162,34 @@ function choose(choices) {
     var index = Math.floor(Math.random() * choices.length);
     return choices[index];
 }
+
+function makeTextSprite(message, opts) {
+    var parameters = opts || {};
+    var fontface = parameters.fontface || 'Helvetica';
+    var fontsize = parameters.fontsize || 70;
+    var fontcolor = parameters.fontcolor || 'rgba(0, 1, 0, 1.0)';
+    var canvas = document.createElement('canvas');
+    var context = canvas.getContext('2d');
+    context.font = fontsize + "px " + fontface;
+  
+    // get size data (height depends only on font size)
+    var metrics = context.measureText(message);
+    var textWidth = metrics.width;
+  
+    // text color
+    context.fillStyle = fontcolor;
+    context.fillText(message, 0, fontsize);
+  
+    // canvas contents will be used for a texture
+    var texture = new THREE.Texture(canvas)
+    texture.minFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+  
+    var spriteMaterial = new THREE.SpriteMaterial({
+        map: texture,
+    });
+    var sprite = new THREE.Sprite(spriteMaterial);
+    // sprite.scale.set(5, 5, 1.0);
+    return sprite;
+  }
+  

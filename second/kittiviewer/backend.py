@@ -67,7 +67,7 @@ def readinfo():
     if not info_path.exists():
         response["status"] = "error"
         response["message"] = "ERROR: info file not exist."
-        print("ERROR: your root path is incorrect.")
+        print("ERROR: your info_path is incorrect.")
         return response
     BACKEND.info_path = info_path
     with open(info_path, 'rb') as f:
@@ -78,6 +78,7 @@ def readinfo():
 
     response = jsonify(results=[response])
     response.headers['Access-Control-Allow-Headers'] = '*'
+    print("read {} kitti info successful!".format(len(kitti_infos)))
     return response
 
 @app.route('/api/read_detection', methods=['POST'])
@@ -99,6 +100,7 @@ def read_detection():
     BACKEND.dt_annos = dt_annos
     response = jsonify(results=[response])
     response.headers['Access-Control-Allow-Headers'] = '*'
+    print("read {} detection successful!".format(len(dt_annos)))
     return response
 
 
@@ -170,8 +172,94 @@ def get_pointcloud():
     #     response["score"] = score.tolist()
     response = jsonify(results=[response])
     response.headers['Access-Control-Allow-Headers'] = '*'
-    print("send response!")
+    print("get point cloud successful, send response!")
     return response
+
+@app.route('/api/build_network', methods=['POST'])
+def build_network():
+    global BACKEND
+    instance = request.json
+    cfg_path = Path(instance["config_path"])
+    ckpt_path = Path(instance["checkpoint_path"])
+    response = {"status": "normal"}
+    if BACKEND.root_path is None:
+        return error_response("root path is not set")
+    if BACKEND.kitti_infos is None:
+        return error_response("kitti info is not loaded")
+    if not cfg_path.exists():
+        return error_response("config file not exist.")
+    if not ckpt_path.exists():
+        return error_response("ckpt file not exist.")
+    BACKEND.inference_ctx = TorchInferenceContext()
+    BACKEND.inference_ctx.build(str(cfg_path))
+    BACKEND.inference_ctx.restore(str(ckpt_path))
+    response = jsonify(results=[response])
+    response.headers['Access-Control-Allow-Headers'] = '*'
+    print("build_network successful!")
+    return response
+
+
+@app.route('/api/inference_by_idx', methods=['POST'])
+def inference_by_idx():
+    global BACKEND
+    instance = request.json
+    response = {"status": "normal"}
+    if BACKEND.root_path is None:
+        return error_response("root path is not set")
+    if BACKEND.kitti_infos is None:
+        return error_response("kitti info is not loaded")
+    if BACKEND.inference_ctx is None:
+        return error_response("inference_ctx is not loaded")
+    image_idx = instance["image_idx"]
+    idx = BACKEND.image_idxes.index(image_idx)
+    kitti_info = BACKEND.kitti_infos[idx]
+
+    v_path = str(Path(BACKEND.root_path) / kitti_info['velodyne_path'])
+    num_features = 4
+    points = np.fromfile(
+        str(v_path), dtype=np.float32,
+        count=-1).reshape([-1, num_features])
+    rect = kitti_info['calib/R0_rect']
+    P2 = kitti_info['calib/P2']
+    Trv2c = kitti_info['calib/Tr_velo_to_cam']
+    if 'img_shape' in kitti_info:
+        image_shape = kitti_info['img_shape']
+        points = box_np_ops.remove_outside_points(
+            points, rect, Trv2c, P2, image_shape)
+        print(points.shape[0])
+
+    t = time.time()
+    inputs = BACKEND.inference_ctx.get_inference_input_dict(
+        kitti_info, points)
+    print("input preparation time:", time.time() - t)
+    t = time.time()
+    with BACKEND.inference_ctx.ctx():
+        dt_annos = BACKEND.inference_ctx.inference(inputs)[0]
+    print("detection time:", time.time() - t)
+    dims = dt_annos['dimensions']
+    num_obj = dims.shape[0]
+    loc = dt_annos['location']
+    rots = dt_annos['rotation_y']
+    labels = dt_annos['name']
+
+    dt_boxes_camera = np.concatenate(
+        [loc, dims, rots[..., np.newaxis]], axis=1)
+    dt_boxes = box_np_ops.box_camera_to_lidar(
+        dt_boxes_camera, rect, Trv2c)
+    box_np_ops.change_box3d_center_(dt_boxes, src=[0.5, 0.5, 0], dst=[0.5, 0.5, 0.5])
+    locs = dt_boxes[:, :3]
+    dims = dt_boxes[:, 3:6]
+    rots = np.concatenate([np.zeros([num_obj, 2], dtype=np.float32), -dt_boxes[:, 6:7]], axis=1)
+    response["dt_locs"] = locs.tolist()
+    response["dt_dims"] = dims.tolist()
+    response["dt_rots"] = rots.tolist()
+    response["dt_labels"] = labels.tolist()
+    response["dt_scores"] = dt_annos["score"].tolist()
+
+    response = jsonify(results=[response])
+    response.headers['Access-Control-Allow-Headers'] = '*'
+    return response
+
 
 def main(port=16666):
     app.run(host='0.0.0.0', threaded=True, port=port)

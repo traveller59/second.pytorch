@@ -3,6 +3,8 @@ SECOND detector. Based on my unofficial implementation of VoxelNet with some imp
 
 ONLY support python 3.6+, pytorch 0.4.1+. Don't support pytorch 0.4.0. Tested in Ubuntu 16.04/18.04.
 
+* Ubuntu 18.04 have speed problem in my environment and may can't build/usr SparseConvNet.
+
 ### Performance in KITTI validation set (50/50 split, people have problems, need to be tuned.)
 
 ```
