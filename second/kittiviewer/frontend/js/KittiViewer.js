@@ -1,10 +1,10 @@
 var KittiViewer = function (pointCloud, logger) {
-    this.rootPath = "/media/yy/960evo/datasets/kitti";
-    this.infoPath = "/media/yy/960evo/datasets/kitti/kitti_infos_val.pkl";
-    this.detPath = "/home/yy/deeplearning/voxelnet_torch_sparse/car_submit0428/results/step_204270/result.pkl";
-    this.backend = "http://traveller59.vipgz1.idcfengye.com";
-    this.checkpointPath = "/home/yy/deeplearning/voxelnet_torch_sparse/car_submit0428/voxelnet-204270.tckpt";
-    this.configPath = "/home/yy/deeplearning/deeplearning/deeplearning/mypackages/voxelnet/configs/car.submit0428.config";
+    this.rootPath = "/path/to/kitti";
+    this.infoPath = "/path/to/infos.pkl";
+    this.detPath = "/path/to/results.pkl";
+    this.backend = "http://127.0.0.1:7000";
+    this.checkpointPath = "/path/to/tckpt";
+    this.configPath = "/path/to/config";
     this.drawDet = false;
     this.imageIndexes = [];
     this.imageIndex = 1;
