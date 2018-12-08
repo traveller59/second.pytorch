@@ -36,6 +36,7 @@ class SecondBackend:
         self.kitti_infos = None
         self.image_idxes = None
         self.dt_annos = None
+        self.inference_ctx = None
 
 
 BACKEND = SecondBackend()
@@ -67,7 +68,7 @@ def readinfo():
     if not info_path.exists():
         response["status"] = "error"
         response["message"] = "ERROR: info file not exist."
-        print("ERROR: your info_path is incorrect.")
+        print("ERROR: your root path is incorrect.")
         return response
     BACKEND.info_path = info_path
     with open(info_path, 'rb') as f:
@@ -78,7 +79,6 @@ def readinfo():
 
     response = jsonify(results=[response])
     response.headers['Access-Control-Allow-Headers'] = '*'
-    print("read {} kitti info successful!".format(len(kitti_infos)))
     return response
 
 @app.route('/api/read_detection', methods=['POST'])
@@ -100,7 +100,6 @@ def read_detection():
     BACKEND.dt_annos = dt_annos
     response = jsonify(results=[response])
     response.headers['Access-Control-Allow-Headers'] = '*'
-    print("read {} detection successful!".format(len(dt_annos)))
     return response
 
 
@@ -108,7 +107,7 @@ def read_detection():
 def get_pointcloud():
     global BACKEND
     instance = request.json
-    response = {}
+    response = {"status": "normal"}
     if BACKEND.root_path is None:
         return error_response("root path is not set")
     if BACKEND.kitti_infos is None:
@@ -119,6 +118,9 @@ def get_pointcloud():
     rect = kitti_info['calib/R0_rect']
     P2 = kitti_info['calib/P2']
     Trv2c = kitti_info['calib/Tr_velo_to_cam']
+    img_shape = kitti_info["img_shape"] # hw
+    wh = np.array(img_shape[::-1])
+    whwh = np.tile(wh, 2)
     if 'annos' in kitti_info:
         annos = kitti_info['annos']
         labels = annos['name']
@@ -126,6 +128,7 @@ def get_pointcloud():
         dims = annos['dimensions'][:num_obj]
         loc = annos['location'][:num_obj]
         rots = annos['rotation_y'][:num_obj]
+        bbox = annos['bbox'][:num_obj] / whwh
         gt_boxes_camera = np.concatenate(
             [loc, dims, rots[..., np.newaxis]], axis=1)
         gt_boxes = box_np_ops.box_camera_to_lidar(
@@ -138,6 +141,8 @@ def get_pointcloud():
         response["locs"] = locs.tolist()
         response["dims"] = dims.tolist()
         response["rots"] = rots.tolist()
+        response["bbox"] = bbox.tolist()
+        
         response["labels"] = labels[:num_obj].tolist()
 
     v_path = str(Path(BACKEND.root_path) / kitti_info['velodyne_path'])
@@ -152,6 +157,7 @@ def get_pointcloud():
         num_obj = dims.shape[0]
         loc = dt_annos['location']
         rots = dt_annos['rotation_y']
+        bbox = dt_annos['bbox'] / whwh
         labels = dt_annos['name']
 
         dt_boxes_camera = np.concatenate(
@@ -166,13 +172,50 @@ def get_pointcloud():
         response["dt_dims"] = dims.tolist()
         response["dt_rots"] = rots.tolist()
         response["dt_labels"] = labels.tolist()
+        response["dt_bbox"] = bbox.tolist()
         response["dt_scores"] = dt_annos["score"].tolist()
 
     # if "score" in annos:
     #     response["score"] = score.tolist()
     response = jsonify(results=[response])
     response.headers['Access-Control-Allow-Headers'] = '*'
-    print("get point cloud successful, send response!")
+    print("send response!")
+    return response
+
+@app.route('/api/get_image', methods=['POST'])
+def get_image():
+    global BACKEND
+    instance = request.json
+    response = {"status": "normal"}
+    if BACKEND.root_path is None:
+        return error_response("root path is not set")
+    if BACKEND.kitti_infos is None:
+        return error_response("kitti info is not loaded")
+    image_idx = instance["image_idx"]
+    idx = BACKEND.image_idxes.index(image_idx)
+    kitti_info = BACKEND.kitti_infos[idx]
+    rect = kitti_info['calib/R0_rect']
+    P2 = kitti_info['calib/P2']
+    Trv2c = kitti_info['calib/Tr_velo_to_cam']
+    if 'img_path' in kitti_info:
+        img_path = kitti_info['img_path']
+        if img_path != "":
+            image_path = BACKEND.root_path / img_path
+            print(image_path)
+            with open(str(image_path), 'rb') as f:
+                image_str = f.read()
+            response["image_b64"] = base64.b64encode(image_str).decode("utf-8")
+            response["image_b64"] = 'data:image/{};base64,'.format(image_path.suffix[1:]) + response["image_b64"]
+            '''# 
+            response["rect"] = rect.tolist()
+            response["P2"] = P2.tolist()
+            response["Trv2c"] = Trv2c.tolist()
+            response["L2CMat"] = ((rect @ Trv2c).T).tolist()
+            response["C2LMat"] = np.linalg.inv((rect @ Trv2c).T).tolist()
+            '''
+            print("send an image with size {}!".format(len(response["image_b64"])))
+    response = jsonify(results=[response])
+    response.headers['Access-Control-Allow-Headers'] = '*'
     return response
 
 @app.route('/api/build_network', methods=['POST'])
@@ -227,6 +270,9 @@ def inference_by_idx():
         points = box_np_ops.remove_outside_points(
             points, rect, Trv2c, P2, image_shape)
         print(points.shape[0])
+    img_shape = kitti_info["img_shape"] # hw
+    wh = np.array(img_shape[::-1])
+    whwh = np.tile(wh, 2)
 
     t = time.time()
     inputs = BACKEND.inference_ctx.get_inference_input_dict(
@@ -241,6 +287,7 @@ def inference_by_idx():
     loc = dt_annos['location']
     rots = dt_annos['rotation_y']
     labels = dt_annos['name']
+    bbox = dt_annos['bbox'] / whwh
 
     dt_boxes_camera = np.concatenate(
         [loc, dims, rots[..., np.newaxis]], axis=1)
@@ -255,6 +302,7 @@ def inference_by_idx():
     response["dt_rots"] = rots.tolist()
     response["dt_labels"] = labels.tolist()
     response["dt_scores"] = dt_annos["score"].tolist()
+    response["dt_bbox"] = bbox.tolist()
 
     response = jsonify(results=[response])
     response.headers['Access-Control-Allow-Headers'] = '*'

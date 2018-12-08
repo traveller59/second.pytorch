@@ -208,19 +208,33 @@ Currently there is a problem that training and evaluating in docker is very slow
 
 ## Try Kitti Viewer Web
 
+### Major step
+
 1. run ```python ./kittiviewer/backend.py main --port=xxxx``` in your server/local.
 
 2. run ```cd ./kittiviewer/frontend && python -m http.server``` to launch a local web server.
 
-3. open your browser and enter http://127.0.0.1:8000.
+3. open your browser and enter your frontend url (e.g. http://127.0.0.1:8000, default]).
 
-4. input backend (http://your_server:your_backend_port)
+4. input backend url (e.g. http://127.0.0.1:16666)
 
 5. input root path, info path and det path (optional)
 
-6. click load, loadDet (optional), then click plot.
+6. click load, loadDet (optional), input image index in center bottom of screen and press Enter.
+
+### Inference step
+
+Firstly the load button must be clicked and load successfully.
+
+1. input checkpointPath and configPath.
+
+2. click buildNet.
+
+3. click inference.
 
 ![GuidePic](https://raw.githubusercontent.com/traveller59/second.pytorch/master/images/viewerweb.png)
+
+
 
 ## Try Kitti Viewer (Deprecated)
 
