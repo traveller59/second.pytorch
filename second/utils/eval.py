@@ -788,12 +788,12 @@ def get_official_eval_result_v1(gt_annos, dt_annos, current_class):
     return result
 
 
-def get_official_eval_result(gt_annos, dt_annos, current_classes, difficultys=[0, 1, 2]):
-    overlap_0_7 = np.array([[0.7, 0.5, 0.5, 0.7,
-                             0.5, 0.7, 0.7, 0.7], [0.7, 0.5, 0.5, 0.7, 0.5, 0.7, 0.7, 0.7],
+def get_official_eval_result(gt_annos, dt_annos, current_classes, difficultys=[0, 1, 2], return_data=False):
+    overlap_0_7 = np.array([[0.7, 0.5, 0.5, 0.7, 0.5, 0.7, 0.7, 0.7],
+                            [0.7, 0.5, 0.5, 0.7, 0.5, 0.7, 0.7, 0.7],
                             [0.7, 0.5, 0.5, 0.7, 0.5, 0.7, 0.7, 0.7]])
-    overlap_0_5 = np.array([[0.7, 0.5, 0.5, 0.7,
-                             0.5, 0.5, 0.5, 0.5], [0.5, 0.25, 0.25, 0.5, 0.25, 0.5, 0.5, 0.5],
+    overlap_0_5 = np.array([[0.7, 0.5, 0.5, 0.7, 0.5, 0.5, 0.5, 0.5],
+                            [0.5, 0.25, 0.25, 0.5, 0.25, 0.5, 0.5, 0.5],
                             [0.5, 0.25, 0.25, 0.5, 0.25, 0.5, 0.5, 0.5]])
     min_overlaps = np.stack([overlap_0_7, overlap_0_5], axis=0)  # [2, 3, 5]
     class_to_name = {
@@ -847,8 +847,11 @@ def get_official_eval_result(gt_annos, dt_annos, current_classes, difficultys=[0
                 result += print_str((f"aos  AP:{mAPaos[j, 0, i]:.2f}, "
                                      f"{mAPaos[j, 1, i]:.2f}, "
                                      f"{mAPaos[j, 2, i]:.2f}"))
+    if return_data:
+        return result, mAPbbox, mAPbev, mAP3d, mAPaos
+    else:
+        return result
 
-    return result
 
 def get_coco_eval_result(gt_annos, dt_annos, current_classes):
     class_to_name = {

@@ -98,6 +98,8 @@ def train(config_path,
 
     model_dir = pathlib.Path(model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
+    eval_checkpoint_dir = model_dir / 'eval_checkpoints'
+    eval_checkpoint_dir.mkdir(parents=True, exist_ok=True)
     if result_path is None:
         result_path = model_dir / 'results'
     config_file_bkp = "pipeline.config"
@@ -335,6 +337,10 @@ def train(config_path,
             total_step_elapsed += steps
             torchplus.train.save_models(model_dir, [net, optimizer],
                                         net.get_global_step())
+
+            # Ensure that all evaluation points are saved forever
+            torchplus.train.save_models(eval_checkpoint_dir, [net, optimizer], net.get_global_step(), max_to_keep=100)
+
             net.eval()
             result_path_step = result_path / f"step_{net.get_global_step()}"
             result_path_step.mkdir(parents=True, exist_ok=True)
@@ -379,10 +385,20 @@ def train(config_path,
             ]
             if not pickle_result:
                 dt_annos = kitti.get_label_annos(result_path_step)
-            result = get_official_eval_result(gt_annos, dt_annos, class_names)
+            result, mAPbbox, mAPbev, mAP3d, mAPaos = get_official_eval_result(gt_annos, dt_annos, class_names,
+                                                                              return_data=True)
             print(result, file=logf)
             print(result)
             writer.add_text('eval_result', result, global_step)
+
+            for i, class_name in enumerate(class_names):
+                writer.add_scalar('bev_ap:{}'.format(class_name), mAPbev[i, 1, 0], global_step)
+                writer.add_scalar('3d_ap:{}'.format(class_name), mAP3d[i, 1, 0], global_step)
+                writer.add_scalar('aos_ap:{}'.format(class_name), mAPaos[i, 1, 0], global_step)
+            writer.add_scalar('bev_map', np.mean(mAPbev[:, 1, 0]), global_step)
+            writer.add_scalar('3d_map', np.mean(mAP3d[:, 1, 0]), global_step)
+            writer.add_scalar('aos_map', np.mean(mAPaos[:, 1, 0]), global_step)
+
             result = get_coco_eval_result(gt_annos, dt_annos, class_names)
             print(result, file=logf)
             print(result)
