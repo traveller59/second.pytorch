@@ -85,6 +85,7 @@ def build(input_reader_config,
         gt_loc_noise_std=list(cfg.groundtruth_localization_noise_std),
         global_rotation_noise=list(cfg.global_rotation_uniform_noise),
         global_scaling_noise=list(cfg.global_scaling_uniform_noise),
+        global_loc_noise_std=(0.2, 0.2, 0.2),
         global_random_rot_range=list(
             cfg.global_random_rotation_range_per_object),
         db_sampler=db_sampler,
