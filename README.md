@@ -143,7 +143,7 @@ eval_input_reader: {
 
 ```bash
 cd ~/second.pytorch/second
-python ./pytorch/train.py train --config_path=./configs/pointpillars/car/xyres_16.config --model_dir=/path/to/model_dir
+python ./pytorch/train.py train --config_path=./configs/pointpillars/car/xyres_16.proto --model_dir=/path/to/model_dir
 ```
 
 * If you want to train a new model, make sure "/path/to/model_dir" doesn't exist.

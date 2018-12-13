@@ -99,7 +99,7 @@ class VoxelFeatureExtractor(nn.Module):
         # var_torch_init(self.linear.bias)
         self.norm = BatchNorm1d(num_filters[1])
 
-    def forward(self, features, num_voxels):
+    def forward(self, features, num_voxels, coors):
         # features: [concated_num_points, num_voxel_size, 3(4)]
         # num_voxels: [concated_num_points]
         points_mean = features[:, :, :3].sum(
@@ -161,7 +161,7 @@ class VoxelFeatureExtractorV2(nn.Module):
         # var_torch_init(self.linear.bias)
         self.norm = BatchNorm1d(num_filters[-1])
 
-    def forward(self, features, num_voxels):
+    def forward(self, features, num_voxels, coors):
         # features: [concated_num_points, num_voxel_size, 3(4)]
         # num_voxels: [concated_num_points]
         points_mean = features[:, :, :3].sum(
@@ -653,7 +653,7 @@ class VoxelNet(nn.Module):
         # features: [num_voxels, max_num_points_per_voxel, 7]
         # num_points: [num_voxels]
         # coors: [num_voxels, 4]
-        voxel_features = self.voxel_feature_extractor(voxels, num_points)
+        voxel_features = self.voxel_feature_extractor(voxels, num_points, coors)
         if self._use_sparse_rpn:
             preds_dict = self.sparse_rpn(voxel_features, coors, batch_size_dev)
         else:
