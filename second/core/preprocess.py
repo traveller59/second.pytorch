@@ -885,3 +885,20 @@ def box_collision_test(boxes, qboxes, clockwise=True):
                             ret[i, j] = True  # collision.
     return ret
 
+
+def global_translate(gt_boxes, points, noise_translate_std):
+    """
+    Apply global translation to gt_boxes and points.
+    """
+
+    if not isinstance(noise_translate_std, (list, tuple, np.ndarray)):
+        noise_translate_std = np.array([noise_translate_std, noise_translate_std, noise_translate_std])
+
+    noise_translate = np.array([np.random.normal(0, noise_translate_std[0], 1),
+                                np.random.normal(0, noise_translate_std[1], 1),
+                                np.random.normal(0, noise_translate_std[0], 1)]).T
+
+    points[:, :3] += noise_translate
+    gt_boxes[:, :3] += noise_translate
+
+    return gt_boxes, points

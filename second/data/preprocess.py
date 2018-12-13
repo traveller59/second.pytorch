@@ -59,6 +59,7 @@ def prep_pointcloud(input_dict,
                     gt_loc_noise_std=[1.0, 1.0, 1.0],
                     global_rotation_noise=[-np.pi / 4, np.pi / 4],
                     global_scaling_noise=[0.95, 1.05],
+                    global_loc_noise_std=(0.2, 0.2, 0.2),
                     global_random_rot_range=[0.78, 2.35],
                     generate_bev=False,
                     without_reflectivity=False,
@@ -207,6 +208,9 @@ def prep_pointcloud(input_dict,
             gt_boxes, points, rotation=global_rotation_noise)
         gt_boxes, points = prep.global_scaling_v2(gt_boxes, points,
                                                   *global_scaling_noise)
+
+        # Global translation
+        gt_boxes, points = prep.global_translate(gt_boxes, points, global_loc_noise_std)
 
         bv_range = voxel_generator.point_cloud_range[[0, 1, 3, 4]]
         mask = prep.filter_gt_box_outside_range(gt_boxes, bv_range)
