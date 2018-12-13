@@ -3,10 +3,11 @@
 Welcome to PointPillars.
 
 This repo demonstrates how to reproduce the results from
-PointPillars: Fast Encoders for Object Detection from Point Cloud on the
+_PointPillars: Fast Encoders for Object Detection from Point Clouds_ on the
 [KITTI dataset](http://www.cvlibs.net/datasets/kitti/) by making the minimum required changes from the preexisting
-open source codebase [SECOND](https://github.com/traveller59/second.pytorch). This is not the official 
-nuTonomy: an Aptiv company's codebase, but it can be used to match the published PointPillars results.
+open source codebase [SECOND](https://github.com/traveller59/second.pytorch). 
+
+This is not an official nuTonomy codebase, but it can be used to match the published PointPillars results.
 
 ##Getting Started
 
@@ -156,8 +157,8 @@ python ./pytorch/train.py train --config_path=./configs/pointpillars/car/xyres_1
 
 
 ```bash
-cd ~/second.pytorch/second
-python ./pytorch/train.py evaluate --config_path=./configs/pointpillars/car/xyres_16.config --model_dir=/path/to/model_dir
+cd ~/second.pytorch/second/
+python pytorch/train.py evaluate --config_path= configs/pointpillars/car/xyres_16.proto --model_dir=/path/to/model_dir
 ```
 
 * Detection result will saved in model_dir/eval_results/step_xxx.
