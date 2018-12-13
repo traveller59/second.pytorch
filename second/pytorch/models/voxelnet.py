@@ -17,8 +17,6 @@ from second.pytorch.core import box_torch_ops
 from second.pytorch.core.losses import (WeightedSigmoidClassificationLoss,
                                           WeightedSmoothL1LocalizationLoss,
                                           WeightedSoftmaxClassificationLoss)
-from second.pytorch.models.pointpillars import PillarFeatureNet, PointPillarsScatter
-from second.pytorch.utils import get_paddings_indicator
 
 
 def _get_pos_neg_loss(cls_loss, labels):
@@ -36,6 +34,30 @@ def _get_pos_neg_loss(cls_loss, labels):
         cls_pos_loss = cls_loss[..., 1:].sum() / batch_size
         cls_neg_loss = cls_loss[..., 0].sum() / batch_size
     return cls_pos_loss, cls_neg_loss
+
+
+def get_paddings_indicator(actual_num, max_num, axis=0):
+    """Create boolean mask by actually number of a padded tensor.
+
+    Args:
+        actual_num ([type]): [description]
+        max_num ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
+
+    actual_num = torch.unsqueeze(actual_num, axis + 1)
+    # tiled_actual_num: [N, M, 1]
+    max_num_shape = [1] * len(actual_num.shape)
+    max_num_shape[axis + 1] = -1
+    max_num = torch.arange(
+        max_num, dtype=torch.int, device=actual_num.device).view(max_num_shape)
+    # tiled_actual_num: [[3,3,3,3,3], [4,4,4,4,4], [2,2,2,2,2]]
+    # tiled_max_num: [[0,1,2,3,4], [0,1,2,3,4], [0,1,2,3,4]]
+    paddings_indicator = actual_num.int() > max_num
+    # paddings_indicator shape: [batch_size, max_num]
+    return paddings_indicator
 
 
 class VFELayer(nn.Module):
@@ -565,7 +587,6 @@ class VoxelNet(nn.Module):
         vfe_class_dict = {
             "VoxelFeatureExtractor": VoxelFeatureExtractor,
             "VoxelFeatureExtractorV2": VoxelFeatureExtractorV2,
-            "PillarFeatureNet": PillarFeatureNet
         }
         vfe_class = vfe_class_dict[vfe_class_name]
         self.voxel_feature_extractor = vfe_class(
@@ -573,32 +594,24 @@ class VoxelNet(nn.Module):
             use_norm,
             num_filters=vfe_num_filters,
             with_distance=with_distance)
-
-        print("middle_class_name", middle_class_name)
-        if middle_class_name == "PointPillarsScatter":
-            self.middle_feature_extractor = PointPillarsScatter(output_shape=output_shape,
-                                                                num_input_features=vfe_num_filters[-1])
-            num_rpn_input_filters = self.middle_feature_extractor.nchannels
-        else:
-            mid_class_dict = {
-                "MiddleExtractor": MiddleExtractor,
-                "SparseMiddleExtractor": SparseMiddleExtractor,
-            }
-            mid_class = mid_class_dict[middle_class_name]
-            self.middle_feature_extractor = mid_class(
-                output_shape,
-                use_norm,
-                num_input_features=vfe_num_filters[-1],
-                num_filters_down1=middle_num_filters_d1,
-                num_filters_down2=middle_num_filters_d2)
-            if len(middle_num_filters_d2) == 0:
-                if len(middle_num_filters_d1) == 0:
-                    num_rpn_input_filters = int(vfe_num_filters[-1] * 2)
-                else:
-                    num_rpn_input_filters = int(middle_num_filters_d1[-1] * 2)
+        mid_class_dict = {
+            "MiddleExtractor": MiddleExtractor,
+            "SparseMiddleExtractor": SparseMiddleExtractor,
+        }
+        mid_class = mid_class_dict[middle_class_name]
+        self.middle_feature_extractor = mid_class(
+            output_shape,
+            use_norm,
+            num_input_features=vfe_num_filters[-1],
+            num_filters_down1=middle_num_filters_d1,
+            num_filters_down2=middle_num_filters_d2)
+        if len(middle_num_filters_d2) == 0:
+            if len(middle_num_filters_d1) == 0:
+                num_rpn_input_filters = vfe_num_filters[-1]
             else:
-                num_rpn_input_filters = int(middle_num_filters_d2[-1] * 2)
-
+                num_rpn_input_filters = middle_num_filters_d1[-1]
+        else:
+            num_rpn_input_filters = middle_num_filters_d2[-1]
         rpn_class_dict = {
             "RPN": RPN,
         }
@@ -611,7 +624,7 @@ class VoxelNet(nn.Module):
             num_filters=rpn_num_filters,
             upsample_strides=rpn_upsample_strides,
             num_upsample_filters=rpn_num_upsample_filters,
-            num_input_filters=num_rpn_input_filters,
+            num_input_filters=num_rpn_input_filters * 2,
             num_anchor_per_loc=target_assigner.num_anchors_per_location,
             encode_background_as_zeros=encode_background_as_zeros,
             use_direction_classifier=use_direction_classifier,
