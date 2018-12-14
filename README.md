@@ -9,7 +9,10 @@ open source codebase [SECOND](https://github.com/traveller59/second.pytorch).
 
 This is not an official nuTonomy codebase, but it can be used to match the published PointPillars results.
 
-##Getting Started
+![Example Results](https://raw.githubusercontent.com/nutonomy/second.pytorch/master/images/pointpillars_kitti_results.pdf)
+
+
+## Getting Started
 
 This is a fork of [SECOND for KITTI object detection](https://github.com/traveller59/second.pytorch) and the relevant
 subset of the original README is reproduced here.
@@ -26,7 +29,7 @@ ONLY supports python 3.6+, pytorch 0.4.1+. Code has only been tested on Ubuntu 1
 git clone https://github.com/nutonomy/second.pytorch.git
 ```
 
-#### 2. Install dependence python packages
+#### 2. Install Python packages
 
 It is recommend to use the Anaconda package manager.
 
@@ -35,7 +38,7 @@ First, use Anaconda to configure as many packages as possible.
 conda create -n pointpillars python=3.7 anaconda
 source activate pointpillars
 conda install shapely pybind11 protobuf scikit-image numba pillow
-conda install pytorch-nightly -c pytorch
+conda install pytorch torchvision -c pytorch
 conda install google-sparsehash -c bioconda
 ```
 
