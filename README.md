@@ -9,7 +9,7 @@ open source codebase [SECOND](https://github.com/traveller59/second.pytorch).
 
 This is not an official nuTonomy codebase, but it can be used to match the published PointPillars results.
 
-![Example Results](https://raw.githubusercontent.com/nutonomy/second.pytorch/master/images/pointpillars_kitti_results.pdf)
+![Example Results](https://raw.githubusercontent.com/nutonomy/second.pytorch/master/images/pointpillars_kitti_results.png)
 
 
 ## Getting Started
