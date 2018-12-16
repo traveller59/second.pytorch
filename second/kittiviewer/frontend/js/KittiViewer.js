@@ -220,15 +220,17 @@ KittiViewer.prototype = {
                     response = response["results"][0];
                     var points_buf = str2buffer(atob(response["pointcloud"]));
                     var points = new Float32Array(points_buf);
-                    var locs = response["locs"];
-                    var dims = response["dims"];
-
-                    var rots = response["rots"];
-                    var labels = response["labels"];
-                    self.gtBboxes = response["bbox"];
-                    self.gtBoxes = boxEdgeWithLabel(dims, locs, rots, 2,
-                        self.gtBoxColor, labels,
-                        self.gtLabelColor);
+                    if (response.hasOwnProperty("dims")){
+                        var locs = response["locs"];
+                        var dims = response["dims"];
+    
+                        var rots = response["rots"];
+                        var labels = response["labels"];
+                        self.gtBboxes = response["bbox"];
+                        self.gtBoxes = boxEdgeWithLabel(dims, locs, rots, 2,
+                            self.gtBoxColor, labels,
+                            self.gtLabelColor);    
+                    }
                     // var boxes = boxEdge(dims, locs, rots, 2, "rgb(0, 255, 0)");
                     for (var i = 0; i < self.gtBoxes.length; ++i) {
                         scene.add(self.gtBoxes[i]);
