@@ -3,7 +3,7 @@
 Welcome to PointPillars.
 
 This repo demonstrates how to reproduce the results from
-_PointPillars: Fast Encoders for Object Detection from Point Clouds_ on the
+[_PointPillars: Fast Encoders for Object Detection from Point Clouds_](https://arxiv.org/abs/1812.05784) on the
 [KITTI dataset](http://www.cvlibs.net/datasets/kitti/) by making the minimum required changes from the preexisting
 open source codebase [SECOND](https://github.com/traveller59/second.pytorch). 
 
