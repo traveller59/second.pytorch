@@ -129,7 +129,13 @@ def train(config_path,
     ######################
     center_limit_range = model_cfg.post_center_limit_range
     net = second_builder.build(model_cfg, voxel_generator, target_assigner)
-    net.cuda()
+    device = None
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+
+    net.to(device=device)
     # net_train = torch.nn.DataParallel(net).cuda()
     print("num_trainable parameters:", len(list(net.parameters())))
     # for n, p in net.named_parameters():
@@ -238,7 +244,7 @@ def train(config_path,
                         net.clear_metrics()
                     data_iter = iter(dataloader)
                     example = next(data_iter)
-                example_torch = example_convert_to_torch(example, float_dtype)
+                example_torch = example_convert_to_torch(example, float_dtype, device)
 
                 batch_size = example["anchors"].shape[0]
 
@@ -379,17 +385,21 @@ def train(config_path,
             ]
             if not pickle_result:
                 dt_annos = kitti.get_label_annos(result_path_step)
-            result = get_official_eval_result(gt_annos, dt_annos, class_names)
-            print(result, file=logf)
-            print(result)
-            writer.add_text('eval_result', result, global_step)
-            result = get_coco_eval_result(gt_annos, dt_annos, class_names)
-            print(result, file=logf)
-            print(result)
+            if device.type == 'cpu':
+                print("Evaluation only support gpu.")
+            else:
+                result = get_official_eval_result(gt_annos, dt_annos, class_names)
+                print(result, file=logf)
+                print(result)
+                writer.add_text('eval_result', result, global_step)
+                result = get_coco_eval_result(gt_annos, dt_annos, class_names)
+                print(result, file=logf)
+                print(result)
+                writer.add_text('eval_result', result, global_step)
             if pickle_result:
                 with open(result_path_step / "result.pkl", 'wb') as f:
                     pickle.dump(dt_annos, f)
-            writer.add_text('eval_result', result, global_step)
+            
             net.train()
     except Exception as e:
         torchplus.train.save_models(model_dir, [net, optimizer],
@@ -570,7 +580,12 @@ def evaluate(config_path,
                                                     bv_range, box_coder)
 
     net = second_builder.build(model_cfg, voxel_generator, target_assigner)
-    net.cuda()
+    device = None
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+    net.to(device=device)
     if train_cfg.enable_mixed_precision:
         net.half()
         net.metrics_to_float()
@@ -611,7 +626,7 @@ def evaluate(config_path,
     bar.start(len(eval_dataset) // input_cfg.batch_size + 1)
 
     for example in iter(eval_dataloader):
-        example = example_convert_to_torch(example, float_dtype)
+        example = example_convert_to_torch(example, float_dtype, device)
         if pickle_result:
             dt_annos += predict_kitti_to_anno(
                 net, example, class_names, center_limit_range,
@@ -626,6 +641,8 @@ def evaluate(config_path,
 
     print(f"avg forward time per example: {net.avg_forward_time:.3f}")
     print(f"avg postprocess time per example: {net.avg_postprocess_time:.3f}")
+    if device.type == 'cpu':
+        print("Evaluation only support gpu. exit.")
     if not predict_test:
         gt_annos = [info["annos"] for info in eval_dataset.dataset.kitti_infos]
         if not pickle_result:

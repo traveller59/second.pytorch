@@ -43,7 +43,7 @@ If you don't have Anaconda:
 pip install numba
 ```
 
-Follow instructions in https://github.com/facebookresearch/SparseConvNet to install SparseConvNet.
+Follow instructions in [SparseConvNet](https://github.com/traveller59/SparseConvNet) to install SparseConvNet . Note that this is a fork of official [SparseConvNet](https://github.com/facebookresearch/SparseConvNet) with checkpoint compatible fix. If you don't use my pretrained model, you can install official version.
 
 Install Boost geometry:
 
@@ -148,46 +148,6 @@ python ./pytorch/train.py evaluate --config_path=./configs/car.config --model_di
 * detection result will saved as a result.pkl file in model_dir/eval_results/step_xxx or save as official KITTI label format if you use --pickle_result=False.
 
 ### pretrained model
-
-Before using pretrained model, you need to modify some file in SparseConvNet because the pretrained model doesn't support SparseConvNet master:
-
-* convolution.py
-```Python
-# self.weight = Parameter(torch.Tensor(
-#     self.filter_volume, nIn, nOut).normal_(
-#     0,
-#     std))
-self.weight = Parameter(torch.Tensor(
-    self.filter_volume * nIn, nOut).normal_(
-    0,
-    std))
-# ...
-# output.features = ConvolutionFunction.apply(
-#     input.features,
-#     self.weight,
-output.features = ConvolutionFunction.apply(
-    input.features,
-    self.weight.view(self.filter_volume, self.nIn, self.nOut),
-```
-
-* submanifoldConvolution.py
-```Python
-# self.weight = Parameter(torch.Tensor(
-#     self.filter_volume, nIn, nOut).normal_(
-#     0,
-#     std))
-self.weight = Parameter(torch.Tensor(
-    self.filter_volume * nIn, nOut).normal_(
-    0,
-    std))
-# ...
-# output.features = SubmanifoldConvolutionFunction.apply(
-#     input.features,
-#     self.weight,
-output.features = SubmanifoldConvolutionFunction.apply(
-    input.features,
-    self.weight.view(self.filter_volume, self.nIn, self.nOut),
-```
 
 You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The car model is corresponding to car.config, the car_tiny model is corresponding to car.tiny.config and the people model is corresponding to people.config.
 
