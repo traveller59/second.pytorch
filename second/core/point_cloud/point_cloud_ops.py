@@ -103,10 +103,15 @@ def _points_to_voxel_kernel(points,
             num_points_per_voxel[voxelidx] += 1
     return voxel_num
 
+@numba.njit
+def _coor_to_voxelidx_reset(coor_to_voxelidx, coors, voxel_num):
+    for i in range(voxel_num):
+        coor_to_voxelidx[coors[i, 0], coors[i, 1], coors[i, 2]] = -1
 
 def points_to_voxel(points,
                      voxel_size,
                      coors_range,
+                     coor_to_voxelidx,
                      max_points=35,
                      reverse_index=True,
                      max_voxels=20000):
@@ -145,7 +150,6 @@ def points_to_voxel(points,
         voxelmap_shape = voxelmap_shape[::-1]
     # don't create large array in jit(nopython=True) code.
     num_points_per_voxel = np.zeros(shape=(max_voxels, ), dtype=np.int32)
-    coor_to_voxelidx = -np.ones(shape=voxelmap_shape, dtype=np.int32)
     voxels = np.zeros(
         shape=(max_voxels, max_points, points.shape[-1]), dtype=points.dtype)
     coors = np.zeros(shape=(max_voxels, 3), dtype=np.int32)
@@ -153,12 +157,11 @@ def points_to_voxel(points,
         voxel_num = _points_to_voxel_reverse_kernel(
             points, voxel_size, coors_range, num_points_per_voxel,
             coor_to_voxelidx, voxels, coors, max_points, max_voxels)
-
     else:
         voxel_num = _points_to_voxel_kernel(
             points, voxel_size, coors_range, num_points_per_voxel,
             coor_to_voxelidx, voxels, coors, max_points, max_voxels)
-
+    _coor_to_voxelidx_reset(coor_to_voxelidx, coors, voxel_num)
     coors = coors[:voxel_num]
     voxels = voxels[:voxel_num]
     num_points_per_voxel = num_points_per_voxel[:voxel_num]
