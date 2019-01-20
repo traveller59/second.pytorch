@@ -102,31 +102,3 @@ def build(optimizer_config, net, name=None, mixed=False, loss_scale=512.0):
     else:
         optimizer.name = name
     return optimizer
-
-class FastAIMixedOptim(OptimWrapper):
-    @classmethod
-    def create(cls, opt_func, lr,
-               layer_groups, model, flat_master=False, loss_scale=512.0, **kwargs):
-        "Create an `optim.Optimizer` from `opt_func` with `lr`. Set lr on `layer_groups`."
-        opt = OptimWrapper.create(opt_func, lr, layer_groups, **kwargs)
-        opt.model_params, opt.master_params = get_master(layer_groups, flat_master)
-        opt.flat_master = flat_master
-        opt.loss_scale = loss_scale
-        opt.model = model
-        #Changes the optimizer so that the optimization step is done in FP32.
-        # opt = self.learn.opt
-        mom,wd,beta = opt.mom,opt.wd,opt.beta
-        lrs = [lr for lr in opt._lr for _ in range(2)]
-        opt_params = [{'params': mp, 'lr': lr} for mp,lr in zip(opt.master_params, lrs)]
-        opt.opt = opt_func(opt_params)
-        opt.mom,opt.wd,opt.beta = mom,wd,beta
-        return opt
-
-    def step(self):
-        model_g2master_g(self.model_params, self.master_params, self.flat_master)
-        for group in self.master_params:
-            for param in group: param.grad.div_(self.loss_scale)
-        super(FastAIMixedOptim, self).step()
-        self.model.zero_grad()
-        #Update the params from master to model.
-        master2model(self.model_params, self.master_params, self.flat_master)

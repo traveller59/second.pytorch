@@ -18,7 +18,7 @@ bev  AP:90.28, 87.73, 79.67
 3d   AP:88.84, 78.43, 76.88
 ```
 
-```car.fhd.config``` + 50 epochs (6.5 hours) + super converge (25 fps in 1080Ti):
+```car.fhd.config``` + 50 epochs + super converge (6.5 hours) +  (25 fps in 1080Ti):
 
 ```
 Car AP@0.70, 0.70, 0.70:
@@ -150,7 +150,9 @@ python ./pytorch/train.py evaluate --config_path=./configs/car.fhd.config --mode
 
 ### pretrained model
 
-You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The ```car_fhd``` model is corresponding to car.fhd.config.
+You can download pretrained models in [google drive](https://drive.google.com/open?id=1YOpgRkBgmSAJwMknoXmitEArNitZz63C). The ```car_fhd``` model is corresponding to car.fhd.config.
+
+Note that this pretrained model is trained before a bug of sparse convolution fixed, so the eval result may slightly worse. 
 
 ## Docker (I don't have time to build docker for SECOND-V1.5)
 
