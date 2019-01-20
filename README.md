@@ -1,24 +1,32 @@
-# SECOND for KITTI object detection
-SECOND detector. Based on my unofficial implementation of VoxelNet with some improvements.
+# SECOND-V1.5 for KITTI object detection
+SECOND-V1.5 detector.
 
-ONLY support python 3.6+, pytorch 0.4.1+. Don't support pytorch 0.4.0. Tested in Ubuntu 16.04/18.04.
+ONLY support python 3.6+, pytorch 1.0.0+. Tested in Ubuntu 16.04/18.04.
 
-* Ubuntu 18.04 have speed problem in my environment and may can't build/usr SparseConvNet.
+## News
 
-### Performance in KITTI validation set (50/50 split, people have problems, need to be tuned.)
+2019-1-20: SECOND V1.5 released! See [release notes](RELEASE.md) for more details.
+
+### Performance in KITTI validation set (50/50 split)
+
+```car.fhd.config``` + 160 epochs (25 fps in 1080Ti):
 
 ```
 Car AP@0.70, 0.70, 0.70:
-bbox AP:90.80, 88.97, 87.52
-bev  AP:89.96, 86.69, 86.11
-3d   AP:87.43, 76.48, 74.66
-aos  AP:90.68, 88.39, 86.57
-Car AP@0.70, 0.50, 0.50:
-bbox AP:90.80, 88.97, 87.52
-bev  AP:90.85, 90.02, 89.36
-3d   AP:90.85, 89.86, 89.05
-aos  AP:90.68, 88.39, 86.57
+bbox AP:90.77, 89.50, 80.80
+bev  AP:90.28, 87.73, 79.67
+3d   AP:88.84, 78.43, 76.88
 ```
+
+```car.fhd.config``` + 50 epochs (6.5 hours) + super converge (25 fps in 1080Ti):
+
+```
+Car AP@0.70, 0.70, 0.70:
+bbox AP:90.78, 89.59, 88.42
+bev  AP:90.12, 87.87, 86.77
+3d   AP:88.62, 78.31, 76.62
+```
+
 
 ## Install
 
@@ -43,14 +51,7 @@ If you don't have Anaconda:
 pip install numba
 ```
 
-Follow instructions in [SparseConvNet](https://github.com/traveller59/SparseConvNet) to install SparseConvNet . Note that this is a fork of official [SparseConvNet](https://github.com/facebookresearch/SparseConvNet) with checkpoint compatible fix. If you don't use my pretrained model, you can install official version.
-
-Install Boost geometry:
-
-```bash
-sudo apt-get install libboost-all-dev
-```
-
+Follow instructions in [spconv](https://github.com/traveller59/spconv) to install spconv. 
 
 ### 3. Setup cuda for numba
 
@@ -130,28 +131,28 @@ eval_input_reader: {
 ### train
 
 ```bash
-python ./pytorch/train.py train --config_path=./configs/car.config --model_dir=/path/to/model_dir
+python ./pytorch/train.py train --config_path=./configs/car.fhd.config --model_dir=/path/to/model_dir
 ```
 
 * Make sure "/path/to/model_dir" doesn't exist if you want to train new model. A new directory will be created if the model_dir doesn't exist, otherwise will read checkpoints in it.
 
-* training process use batchsize=3 as default for 1080Ti, you need to reduce batchsize if your GPU has less memory.
+* training process use batchsize=6 as default for 1080Ti, you need to reduce batchsize if your GPU has less memory.
 
-* Currently only support single GPU training, but train a model only needs 20 hours (165 epoch) in a single 1080Ti and only needs 40 epoch to reach 74 AP in car moderate 3D in Kitti validation dateset.
+* Currently only support single GPU training, but train a model only needs 20 hours (165 epoch) in a single 1080Ti and only needs 50 epoch to reach 78.3 AP with super converge in car moderate 3D in Kitti validation dateset.
 
 ### evaluate
 
 ```bash
-python ./pytorch/train.py evaluate --config_path=./configs/car.config --model_dir=/path/to/model_dir
+python ./pytorch/train.py evaluate --config_path=./configs/car.fhd.config --model_dir=/path/to/model_dir --measure_time=True --batch_size=1
 ```
 
 * detection result will saved as a result.pkl file in model_dir/eval_results/step_xxx or save as official KITTI label format if you use --pickle_result=False.
 
 ### pretrained model
 
-You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The car model is corresponding to car.config, the car_tiny model is corresponding to car.tiny.config and the people model is corresponding to people.config.
+You can download pretrained models in [google drive](https://drive.google.com/open?id=1eblyuILwbxkJXfIP5QlALW5N_x5xJZhL). The ```car_fhd``` model is corresponding to car.fhd.config.
 
-## Docker
+## Docker (I don't have time to build docker for SECOND-V1.5)
 
 You can use a prebuilt docker for testing:
 ```
@@ -161,10 +162,7 @@ Then run:
 ```
 nvidia-docker run -it --rm -v /media/yy/960evo/datasets/:/root/data -v $HOME/pretrained_models:/root/model --ipc=host second-pytorch:latest
 python ./pytorch/train.py evaluate --config_path=./configs/car.config --model_dir=/root/model/car
-...
 ```
-
-Currently there is a problem that training and evaluating in docker is very slow.
 
 ## Try Kitti Viewer Web
 

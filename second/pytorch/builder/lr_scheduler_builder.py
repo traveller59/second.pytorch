@@ -13,12 +13,10 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Functions to build DetectionModel training optimizers."""
-
-from torchplus.train import learning_schedules
+from torchplus.train import learning_schedules_fastai as lsf
 import torch
 
-def build(optimizer_config, optimizer, last_step=-1):
+def build(optimizer_config, optimizer, total_step):
   """Create lr scheduler based on config. note that
   lr_scheduler must accept a optimizer that has been restored.
 
@@ -36,21 +34,21 @@ def build(optimizer_config, optimizer, last_step=-1):
   if optimizer_type == 'rms_prop_optimizer':
     config = optimizer_config.rms_prop_optimizer
     lr_scheduler = _create_learning_rate_scheduler(
-      config.learning_rate, optimizer, last_step=last_step)
+      config.learning_rate, optimizer, total_step=total_step)
 
   if optimizer_type == 'momentum_optimizer':
     config = optimizer_config.momentum_optimizer
     lr_scheduler = _create_learning_rate_scheduler(
-      config.learning_rate, optimizer, last_step=last_step)
+      config.learning_rate, optimizer, total_step=total_step)
 
   if optimizer_type == 'adam_optimizer':
     config = optimizer_config.adam_optimizer
     lr_scheduler = _create_learning_rate_scheduler(
-      config.learning_rate, optimizer, last_step=last_step)
+      config.learning_rate, optimizer, total_step=total_step)
 
   return lr_scheduler
 
-def _create_learning_rate_scheduler(learning_rate_config, optimizer, last_step=-1):
+def _create_learning_rate_scheduler(learning_rate_config, optimizer, total_step):
   """Create optimizer learning rate scheduler based on config.
 
   Args:
@@ -64,34 +62,20 @@ def _create_learning_rate_scheduler(learning_rate_config, optimizer, last_step=-
   """
   lr_scheduler = None
   learning_rate_type = learning_rate_config.WhichOneof('learning_rate')
-  if learning_rate_type == 'constant_learning_rate':
-    config = learning_rate_config.constant_learning_rate
-    lr_scheduler = learning_schedules.Constant(
-      optimizer, last_step=last_step)
+  if learning_rate_type == 'multi_phase':
+    config = learning_rate_config.multi_phase
+    lr_phases = []
+    mom_phases = []
+    for phase_cfg in config.phases:
+      lr_phases.append((phase_cfg.start, phase_cfg.lambda_func))
+      mom_phases.append((phase_cfg.start, phase_cfg.momentum_lambda_func))
+    lr_scheduler = lsf.LRSchedulerStep(
+      optimizer,total_step, lr_phases, mom_phases)
 
-  if learning_rate_type == 'exponential_decay_learning_rate':
-    config = learning_rate_config.exponential_decay_learning_rate
-    lr_scheduler = learning_schedules.ExponentialDecay(
-      optimizer, config.decay_steps, 
-      config.decay_factor, config.staircase, last_step=last_step)
-
-  if learning_rate_type == 'manual_step_learning_rate':
-    config = learning_rate_config.manual_step_learning_rate
-    if not config.schedule:
-      raise ValueError('Empty learning rate schedule.')
-    learning_rate_step_boundaries = [x.step for x in config.schedule]
-    learning_rate_sequence = [config.initial_learning_rate]
-    learning_rate_sequence += [x.learning_rate for x in config.schedule]
-    lr_scheduler = learning_schedules.ManualStepping(
-      optimizer, learning_rate_step_boundaries, learning_rate_sequence, 
-      last_step=last_step)
-
-  if learning_rate_type == 'cosine_decay_learning_rate':
-    config = learning_rate_config.cosine_decay_learning_rate
-    lr_scheduler = learning_schedules.CosineDecayWithWarmup(
-      optimizer, config.total_steps, 
-      config.warmup_learning_rate, config.warmup_steps, 
-      last_step=last_step)
+  if learning_rate_type == 'one_cycle':
+    config = learning_rate_config.one_cycle
+    lr_scheduler = lsf.OneCycle(
+      optimizer, total_step, config.lr_max, list(config.moms), config.div_factor, config.pct_start)
 
   if lr_scheduler is None:
     raise ValueError('Learning_rate %s not supported.' % learning_rate_type)

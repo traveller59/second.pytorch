@@ -1,17 +1,10 @@
 import numba
 from pathlib import Path
 import numpy as np
-from second.utils.buildtools.pybind11_build import load_pb11
-
 from second.core.geometry import points_in_convex_polygon_3d_jit
 from second.core.non_max_suppression.nms_gpu import rotate_iou_gpu_eval
 
-try:
-    from second.core import box_ops_cc
-except:
-    current_dir = Path(__file__).resolve().parents[0]
-    box_ops_cc = load_pb11(["./cc/box_ops.cc"], current_dir / "box_ops_cc.so", current_dir)
-
+from spconv.utils import rbbox_iou
 
 def riou_cc(rbboxes, qrbboxes, standup_thresh=0.0):
     # less than 50ms when used in second one thread. 10x slower than gpu
@@ -23,7 +16,7 @@ def riou_cc(rbboxes, qrbboxes, standup_thresh=0.0):
     qboxes_standup = corner_to_standup_nd(qboxes_corners)
     # if standup box not overlapped, rbbox not overlapped too.
     standup_iou = iou_jit(boxes_standup, qboxes_standup, eps=0.0)
-    return box_ops_cc.rbbox_iou(boxes_corners, qboxes_corners, standup_iou,
+    return rbbox_iou(boxes_corners, qboxes_corners, standup_iou,
                                 standup_thresh)
 
 

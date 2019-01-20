@@ -9,7 +9,6 @@ from skimage import io as imgio
 from second.core import box_np_ops
 from second.core import preprocess as prep
 from second.core.geometry import points_in_convex_polygon_3d_jit
-from second.core.point_cloud.bev_ops import points_to_bev
 from second.data import kitti_common as kitti
 
 
@@ -212,6 +211,7 @@ def prep_pointcloud(input_dict,
         mask = prep.filter_gt_box_outside_range(gt_boxes, bv_range)
         gt_boxes = gt_boxes[mask]
         gt_classes = gt_classes[mask]
+        gt_names = gt_names[mask]
         if group_ids is not None:
             group_ids = group_ids[mask]
 
@@ -251,12 +251,14 @@ def prep_pointcloud(input_dict,
         anchors_bv = anchor_cache["anchors_bv"]
         matched_thresholds = anchor_cache["matched_thresholds"]
         unmatched_thresholds = anchor_cache["unmatched_thresholds"]
+        anchors_dict = anchor_cache["anchors_dict"]
     else:
         ret = target_assigner.generate_anchors(feature_map_size)
         anchors = ret["anchors"]
         anchors = anchors.reshape([-1, 7])
         matched_thresholds = ret["matched_thresholds"]
         unmatched_thresholds = ret["unmatched_thresholds"]
+        anchors_dict = target_assigner.generate_anchors_dict(feature_map_size)
         anchors_bv = box_np_ops.rbbox2d_to_near_bbox(
             anchors[:, [0, 1, 3, 4, 6]])
     example["anchors"] = anchors
@@ -274,23 +276,15 @@ def prep_pointcloud(input_dict,
         anchors_mask = anchors_area > anchor_area_threshold
         # example['anchors_mask'] = anchors_mask.astype(np.uint8)
         example['anchors_mask'] = anchors_mask
-    if generate_bev:
-        bev_vxsize = voxel_size.copy()
-        bev_vxsize[:2] /= 2
-        bev_vxsize[2] *= 2
-        bev_map = points_to_bev(points, bev_vxsize, pc_range,
-                                without_reflectivity)
-        example["bev_map"] = bev_map
     if not training:
         return example
     if create_targets:
-        targets_dict = target_assigner.assign(
-            anchors,
+        targets_dict = target_assigner.assign_v2(
+            anchors_dict,
             gt_boxes,
             anchors_mask,
             gt_classes=gt_classes,
-            matched_thresholds=matched_thresholds,
-            unmatched_thresholds=unmatched_thresholds)
+            gt_names=gt_names)
         example.update({
             'labels': targets_dict['labels'],
             'reg_targets': targets_dict['bbox_targets'],

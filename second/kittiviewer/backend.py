@@ -15,7 +15,6 @@ from pathlib import Path
 import second.core.box_np_ops as box_np_ops
 import second.core.preprocess as prep
 from second.core.box_coders import GroundBox3dCoder
-from second.core.point_cloud.point_cloud_ops import points_to_voxel
 from second.core.region_similarity import (
     DistanceSimilarity, NearestIouSimilarity, RotateIouSimilarity)
 from second.core.sample_ops import DataBaseSamplerV2
@@ -310,7 +309,7 @@ def inference_by_idx():
 
 
 def main(port=16666):
-    app.run(host='0.0.0.0', threaded=True, port=port)
+    app.run(host='127.0.0.1', threaded=True, port=port)
 
 if __name__ == '__main__':
     fire.Fire()

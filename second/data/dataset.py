@@ -39,6 +39,7 @@ class KittiDataset(Dataset):
         # generate anchors cache
         # [352, 400]
         ret = target_assigner.generate_anchors(feature_map_size)
+        anchors_dict = target_assigner.generate_anchors_dict(feature_map_size)
         anchors = ret["anchors"]
         anchors = anchors.reshape([-1, 7])
         matched_thresholds = ret["matched_thresholds"]
@@ -50,6 +51,7 @@ class KittiDataset(Dataset):
             "anchors_bv": anchors_bv,
             "matched_thresholds": matched_thresholds,
             "unmatched_thresholds": unmatched_thresholds,
+            "anchors_dict": anchors_dict,
         }
         self._prep_func = partial(prep_func, anchor_cache=anchor_cache)
 

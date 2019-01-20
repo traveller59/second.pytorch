@@ -46,7 +46,7 @@ class InferenceContext:
             voxel_generator=self.voxel_generator,
             target_assigner=self.target_assigner,
             max_voxels=input_cfg.max_number_of_voxels,
-            class_names=list(input_cfg.class_names),
+            class_names=self.target_assigner.classes,
             training=False,
             create_targets=False,
             shuffle_points=input_cfg.shuffle_points,

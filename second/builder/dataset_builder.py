@@ -53,7 +53,10 @@ def build(input_reader_config,
     generate_bev = model_config.use_bev
     without_reflectivity = model_config.without_reflectivity
     num_point_features = model_config.num_point_features
-    out_size_factor = model_config.rpn.layer_strides[0] // model_config.rpn.upsample_strides[0]
+    out_size_factor = model_config.rpn.layer_strides[0] / model_config.rpn.upsample_strides[0]
+    out_size_factor *= model_config.middle_feature_extractor.downsample_factor
+    out_size_factor = int(out_size_factor)
+    assert out_size_factor > 0
 
     cfg = input_reader_config
     db_sampler_cfg = input_reader_config.database_sampler
@@ -68,11 +71,11 @@ def build(input_reader_config,
     # [352, 400]
     feature_map_size = grid_size[:2] // out_size_factor
     feature_map_size = [*feature_map_size, 1][::-1]
-
+    assert all([n != '' for n in target_assigner.classes]), "you must specify class_name in anchor_generators."
     prep_func = partial(
         prep_pointcloud,
         root_path=cfg.kitti_root_path,
-        class_names=list(cfg.class_names),
+        class_names=target_assigner.classes,
         voxel_generator=voxel_generator,
         target_assigner=target_assigner,
         training=training,

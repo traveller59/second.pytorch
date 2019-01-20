@@ -15,10 +15,28 @@
 """Functions to build DetectionModel training optimizers."""
 
 from torchplus.train import learning_schedules
+from torchplus.train import optim
 import torch
+from torch import nn
+from torchplus.train.fastai_optim import OptimWrapper, FastAIMixedOptim
+from functools import partial
 
 
-def build(optimizer_config, params, name=None):
+def children(m: nn.Module):
+    "Get children of `m`."
+    return list(m.children())
+
+
+def num_children(m: nn.Module) -> int:
+    "Get number of children modules in `m`."
+    return len(children(m))
+
+flatten_model = lambda m: sum(map(flatten_model,m.children()),[]) if num_children(m) else [m]
+
+get_layer_groups = lambda m: [nn.Sequential(*flatten_model(m))]
+
+
+def build(optimizer_config, net, name=None, mixed=False, loss_scale=512.0):
     """Create optimizer based on config.
 
   Args:
@@ -35,28 +53,43 @@ def build(optimizer_config, params, name=None):
 
     if optimizer_type == 'rms_prop_optimizer':
         config = optimizer_config.rms_prop_optimizer
-        optimizer = torch.optim.RMSprop(
-            params,
-            lr=_get_base_lr_by_lr_scheduler(config.learning_rate),
+        optimizer_func = partial(
+            torch.optim.RMSprop,
             alpha=config.decay,
             momentum=config.momentum_optimizer_value,
-            eps=config.epsilon,
-            weight_decay=config.weight_decay)
+            eps=config.epsilon)
 
     if optimizer_type == 'momentum_optimizer':
         config = optimizer_config.momentum_optimizer
-        optimizer = torch.optim.SGD(
-            params,
-            lr=_get_base_lr_by_lr_scheduler(config.learning_rate),
+        optimizer_func = partial(
+            torch.optim.SGD,
             momentum=config.momentum_optimizer_value,
-            weight_decay=config.weight_decay)
+            eps=config.epsilon)
 
     if optimizer_type == 'adam_optimizer':
         config = optimizer_config.adam_optimizer
-        optimizer = torch.optim.Adam(
-            params,
-            lr=_get_base_lr_by_lr_scheduler(config.learning_rate),
-            weight_decay=config.weight_decay)
+        optimizer_func = partial(
+            torch.optim.Adam, betas=(0.9, 0.99), amsgrad=config.amsgrad)
+
+    # optimizer = OptimWrapper(optimizer, true_wd=optimizer_config.fixed_weight_decay, wd=config.weight_decay)
+    if mixed:
+        optimizer = FastAIMixedOptim.create(
+            optimizer_func,
+            3e-3,
+            get_layer_groups(net),
+            net,
+            loss_scale=loss_scale,
+            wd=config.weight_decay,
+            true_wd=optimizer_config.fixed_weight_decay,
+            bn_wd=True)
+    else:
+        optimizer = OptimWrapper.create(
+            optimizer_func,
+            3e-3,
+            get_layer_groups(net),
+            wd=config.weight_decay,
+            true_wd=optimizer_config.fixed_weight_decay,
+            bn_wd=True)
 
     if optimizer is None:
         raise ValueError('Optimizer %s not supported.' % optimizer_type)
@@ -70,29 +103,30 @@ def build(optimizer_config, params, name=None):
         optimizer.name = name
     return optimizer
 
+class FastAIMixedOptim(OptimWrapper):
+    @classmethod
+    def create(cls, opt_func, lr,
+               layer_groups, model, flat_master=False, loss_scale=512.0, **kwargs):
+        "Create an `optim.Optimizer` from `opt_func` with `lr`. Set lr on `layer_groups`."
+        opt = OptimWrapper.create(opt_func, lr, layer_groups, **kwargs)
+        opt.model_params, opt.master_params = get_master(layer_groups, flat_master)
+        opt.flat_master = flat_master
+        opt.loss_scale = loss_scale
+        opt.model = model
+        #Changes the optimizer so that the optimization step is done in FP32.
+        # opt = self.learn.opt
+        mom,wd,beta = opt.mom,opt.wd,opt.beta
+        lrs = [lr for lr in opt._lr for _ in range(2)]
+        opt_params = [{'params': mp, 'lr': lr} for mp,lr in zip(opt.master_params, lrs)]
+        opt.opt = opt_func(opt_params)
+        opt.mom,opt.wd,opt.beta = mom,wd,beta
+        return opt
 
-def _get_base_lr_by_lr_scheduler(learning_rate_config):
-    base_lr = None
-    learning_rate_type = learning_rate_config.WhichOneof('learning_rate')
-    if learning_rate_type == 'constant_learning_rate':
-        config = learning_rate_config.constant_learning_rate
-        base_lr = config.learning_rate
-
-    if learning_rate_type == 'exponential_decay_learning_rate':
-        config = learning_rate_config.exponential_decay_learning_rate
-        base_lr = config.initial_learning_rate
-
-    if learning_rate_type == 'manual_step_learning_rate':
-        config = learning_rate_config.manual_step_learning_rate
-        base_lr = config.initial_learning_rate
-        if not config.schedule:
-            raise ValueError('Empty learning rate schedule.')
-
-    if learning_rate_type == 'cosine_decay_learning_rate':
-        config = learning_rate_config.cosine_decay_learning_rate
-        base_lr = config.learning_rate_base
-    if base_lr is None:
-        raise ValueError(
-            'Learning_rate %s not supported.' % learning_rate_type)
-
-    return base_lr
+    def step(self):
+        model_g2master_g(self.model_params, self.master_params, self.flat_master)
+        for group in self.master_params:
+            for param in group: param.grad.div_(self.loss_scale)
+        super(FastAIMixedOptim, self).step()
+        self.model.zero_grad()
+        #Update the params from master to model.
+        master2model(self.model_params, self.master_params, self.flat_master)

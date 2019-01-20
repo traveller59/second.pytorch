@@ -4,7 +4,7 @@ import pickle
 import shutil
 import time
 from functools import partial
-
+import json 
 import fire
 import numpy as np
 import torch
@@ -71,12 +71,12 @@ def example_convert_to_torch(example, dtype=torch.float32,
 
     for k, v in example.items():
         if k in float_names:
-            example_torch[k] = torch.as_tensor(v, dtype=dtype, device=device)
+            example_torch[k] = torch.tensor(v, dtype=torch.float32, device=device).to(dtype)
         elif k in ["coordinates", "labels", "num_points"]:
-            example_torch[k] = torch.as_tensor(
+            example_torch[k] = torch.tensor(
                 v, dtype=torch.int32, device=device)
         elif k in ["anchors_mask"]:
-            example_torch[k] = torch.as_tensor(
+            example_torch[k] = torch.tensor(
                 v, dtype=torch.uint8, device=device)
         else:
             example_torch[k] = v
@@ -89,13 +89,14 @@ def train(config_path,
           create_folder=False,
           display_step=50,
           summary_step=5,
-          pickle_result=True):
+          pickle_result=True,
+          patchs=None):
     """train a VoxelNet model specified by a config file.
     """
     if create_folder:
         if pathlib.Path(model_dir).exists():
             model_dir = torchplus.train.create_folder(model_dir)
-
+    patchs = patchs or []
     model_dir = pathlib.Path(model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
     if result_path is None:
@@ -105,13 +106,16 @@ def train(config_path,
     with open(config_path, "r") as f:
         proto_str = f.read()
         text_format.Merge(proto_str, config)
+    for patch in patchs:
+        patch = "config." + patch 
+        exec(patch)
     shutil.copyfile(config_path, str(model_dir / config_file_bkp))
     input_cfg = config.train_input_reader
     eval_input_cfg = config.eval_input_reader
     model_cfg = config.model.second
     train_cfg = config.train_config
 
-    class_names = list(input_cfg.class_names)
+    
     ######################
     # BUILD VOXEL GENERATOR
     ######################
@@ -124,18 +128,13 @@ def train(config_path,
     target_assigner_cfg = model_cfg.target_assigner
     target_assigner = target_assigner_builder.build(target_assigner_cfg,
                                                     bv_range, box_coder)
+    class_names = target_assigner.classes
     ######################
     # BUILD NET
     ######################
     center_limit_range = model_cfg.post_center_limit_range
     net = second_builder.build(model_cfg, voxel_generator, target_assigner)
-    device = None
-    if torch.cuda.is_available():
-        device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
-
-    net.to(device=device)
+    net.cuda()
     # net_train = torch.nn.DataParallel(net).cuda()
     print("num_trainable parameters:", len(list(net.parameters())))
     # for n, p in net.named_parameters():
@@ -151,17 +150,20 @@ def train(config_path,
         net.half()
         net.metrics_to_float()
         net.convert_norm_to_float(net)
-    optimizer = optimizer_builder.build(optimizer_cfg, net.parameters())
+    loss_scale = train_cfg.loss_scale_factor
+    mixed_optimizer = optimizer_builder.build(optimizer_cfg, net, mixed=train_cfg.enable_mixed_precision, loss_scale=loss_scale)
+    optimizer = mixed_optimizer
+    """
     if train_cfg.enable_mixed_precision:
-        loss_scale = train_cfg.loss_scale_factor
         mixed_optimizer = torchplus.train.MixedPrecisionWrapper(
             optimizer, loss_scale)
     else:
         mixed_optimizer = optimizer
+    """
     # must restore optimizer AFTER using MixedPrecisionWrapper
     torchplus.train.try_restore_latest_checkpoints(model_dir,
                                                    [mixed_optimizer])
-    lr_scheduler = lr_scheduler_builder.build(optimizer_cfg, optimizer, gstep)
+    lr_scheduler = lr_scheduler_builder.build(optimizer_cfg, optimizer, train_cfg.steps)
     if train_cfg.enable_mixed_precision:
         float_dtype = torch.float16
     else:
@@ -203,12 +205,18 @@ def train(config_path,
         num_workers=eval_input_cfg.num_workers,
         pin_memory=False,
         collate_fn=merge_second_batch)
+    
     data_iter = iter(dataloader)
 
     ######################
     # TRAINING
     ######################
+    training_detail = []
     log_path = model_dir / 'log.txt'
+    training_detail_path = model_dir / 'log.json'
+    if training_detail_path.exists():
+        with open(training_detail_path, 'r') as f:
+            training_detail = json.load(f)
     logf = open(log_path, 'a')
     logf.write(proto_str)
     logf.write("\n")
@@ -235,7 +243,7 @@ def train(config_path,
             else:
                 steps = train_cfg.steps_per_eval
             for step in range(steps):
-                lr_scheduler.step()
+                lr_scheduler.step(net.get_global_step())
                 try:
                     example = next(data_iter)
                 except StopIteration:
@@ -244,7 +252,7 @@ def train(config_path,
                         net.clear_metrics()
                     data_iter = iter(dataloader)
                     example = next(data_iter)
-                example_torch = example_convert_to_torch(example, float_dtype, device)
+                example_torch = example_convert_to_torch(example, float_dtype)
 
                 batch_size = example["anchors"].shape[0]
 
@@ -288,6 +296,7 @@ def train(config_path,
                         float(loc_loss[:, :, i].sum().detach().cpu().numpy() /
                               batch_size) for i in range(loc_loss.shape[-1])
                     ]
+                    metrics["type"] = "step_info"
                     metrics["step"] = global_step
                     metrics["steptime"] = step_time
                     metrics.update(net_metrics)
@@ -297,9 +306,6 @@ def train(config_path,
                         cls_pos_loss.detach().cpu().numpy())
                     metrics["loss"]["cls_neg_rt"] = float(
                         cls_neg_loss.detach().cpu().numpy())
-                    # if unlabeled_training:
-                    #     metrics["loss"]["diff_rt"] = float(
-                    #         diff_loc_loss_reduced.detach().cpu().numpy())
                     if model_cfg.use_direction_classifier:
                         metrics["loss"]["dir_rt"] = float(
                             dir_loss_reduced.detach().cpu().numpy())
@@ -307,17 +313,23 @@ def train(config_path,
                     metrics["num_pos"] = int(num_pos)
                     metrics["num_neg"] = int(num_neg)
                     metrics["num_anchors"] = int(num_anchors)
+                    # metrics["lr"] = float(
+                    #     mixed_optimizer.param_groups[0]['lr'])
                     metrics["lr"] = float(
-                        mixed_optimizer.param_groups[0]['lr'])
+                        optimizer.lr)
+
                     metrics["image_idx"] = example['image_idx'][0]
+                    training_detail.append(metrics)
                     flatted_metrics = flat_nested_json_dict(metrics)
                     flatted_summarys = flat_nested_json_dict(metrics, "/")
+                    """
                     for k, v in flatted_summarys.items():
                         if isinstance(v, (list, tuple)):
                             v = {str(i): e for i, e in enumerate(v)}
                             writer.add_scalars(k, v, global_step)
                         else:
                             writer.add_scalar(k, v, global_step)
+                    """
                     metrics_str_list = []
                     for k, v in flatted_metrics.items():
                         if isinstance(v, float):
@@ -355,7 +367,8 @@ def train(config_path,
             t = time.time()
             dt_annos = []
             prog_bar = ProgressBar()
-            prog_bar.start(len(eval_dataset) // eval_input_cfg.batch_size + 1)
+            net.clear_timer()
+            prog_bar.start((len(eval_dataset) + eval_input_cfg.batch_size - 1) // eval_input_cfg.batch_size)
             for example in iter(eval_dataloader):
                 example = example_convert_to_torch(example, float_dtype)
                 if pickle_result:
@@ -370,12 +383,7 @@ def train(config_path,
                 prog_bar.print_bar()
 
             sec_per_ex = len(eval_dataset) / (time.time() - t)
-            print(f"avg forward time per example: {net.avg_forward_time:.3f}")
-            print(
-                f"avg postprocess time per example: {net.avg_postprocess_time:.3f}"
-            )
-
-            net.clear_time_metrics()
+            
             print(f'generate label finished({sec_per_ex:.2f}/s). start eval:')
             print(
                 f'generate label finished({sec_per_ex:.2f}/s). start eval:',
@@ -385,21 +393,19 @@ def train(config_path,
             ]
             if not pickle_result:
                 dt_annos = kitti.get_label_annos(result_path_step)
-            if device.type == 'cpu':
-                print("Evaluation only support gpu.")
-            else:
-                result = get_official_eval_result(gt_annos, dt_annos, class_names)
-                print(result, file=logf)
-                print(result)
-                writer.add_text('eval_result', result, global_step)
-                result = get_coco_eval_result(gt_annos, dt_annos, class_names)
-                print(result, file=logf)
-                print(result)
-                writer.add_text('eval_result', result, global_step)
+            # result = get_official_eval_result_v2(gt_annos, dt_annos, class_names)
+            # print(json.dumps(result, indent=2), file=logf)
+            result = get_official_eval_result(gt_annos, dt_annos, class_names)
+            print(result, file=logf)
+            print(result)
+            writer.add_text('eval_result', json.dumps(result, indent=2), global_step)
+            result = get_coco_eval_result(gt_annos, dt_annos, class_names)
+            print(result, file=logf)
+            print(result)
             if pickle_result:
                 with open(result_path_step / "result.pkl", 'wb') as f:
                     pickle.dump(dt_annos, f)
-            
+            writer.add_text('eval_result', result, global_step)
             net.train()
     except Exception as e:
         torchplus.train.save_models(model_dir, [net, optimizer],
@@ -425,7 +431,7 @@ def _predict_kitti_to_file(net,
     for i, preds_dict in enumerate(predictions_dicts):
         image_shape = batch_image_shape[i]
         img_idx = preds_dict["image_idx"]
-        if preds_dict["bbox"] is not None:
+        if preds_dict["bbox"] is not None or preds_dict["bbox"].size.numel():
             box_2d_preds = preds_dict["bbox"].data.cpu().numpy()
             box_preds = preds_dict["box3d_camera"].data.cpu().numpy()
             scores = preds_dict["scores"].data.cpu().numpy()
@@ -485,7 +491,7 @@ def predict_kitti_to_anno(net,
     for i, preds_dict in enumerate(predictions_dicts):
         image_shape = batch_image_shape[i]
         img_idx = preds_dict["image_idx"]
-        if preds_dict["bbox"] is not None:
+        if preds_dict["bbox"] is not None or preds_dict["bbox"].size.numel() != 0:
             box_2d_preds = preds_dict["bbox"].detach().cpu().numpy()
             box_preds = preds_dict["box3d_camera"].detach().cpu().numpy()
             scores = preds_dict["scores"].detach().cpu().numpy()
@@ -549,7 +555,9 @@ def evaluate(config_path,
              predict_test=False,
              ckpt_path=None,
              ref_detfile=None,
-             pickle_result=True):
+             pickle_result=True,
+             measure_time=False,
+             batch_size=None):
     model_dir = pathlib.Path(model_dir)
     if predict_test:
         result_name = 'predict_test'
@@ -567,7 +575,7 @@ def evaluate(config_path,
     input_cfg = config.eval_input_reader
     model_cfg = config.model.second
     train_cfg = config.train_config
-    class_names = list(input_cfg.class_names)
+    
     center_limit_range = model_cfg.post_center_limit_range
     ######################
     # BUILD VOXEL GENERATOR
@@ -578,24 +586,21 @@ def evaluate(config_path,
     target_assigner_cfg = model_cfg.target_assigner
     target_assigner = target_assigner_builder.build(target_assigner_cfg,
                                                     bv_range, box_coder)
+    class_names = target_assigner.classes
 
-    net = second_builder.build(model_cfg, voxel_generator, target_assigner)
-    device = None
-    if torch.cuda.is_available():
-        device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
-    net.to(device=device)
-    if train_cfg.enable_mixed_precision:
-        net.half()
-        net.metrics_to_float()
-        net.convert_norm_to_float(net)
+    net = second_builder.build(model_cfg, voxel_generator, target_assigner, measure_time=measure_time)
+    net.cuda()
 
     if ckpt_path is None:
         torchplus.train.try_restore_latest_checkpoints(model_dir, [net])
     else:
         torchplus.train.restore(ckpt_path, net)
-
+    if train_cfg.enable_mixed_precision:
+        net.half()
+        print("half inference!")
+        net.metrics_to_float()
+        net.convert_norm_to_float(net)
+    batch_size = batch_size or input_cfg.batch_size
     eval_dataset = input_reader_builder.build(
         input_cfg,
         model_cfg,
@@ -604,9 +609,9 @@ def evaluate(config_path,
         target_assigner=target_assigner)
     eval_dataloader = torch.utils.data.DataLoader(
         eval_dataset,
-        batch_size=input_cfg.batch_size,
+        batch_size=batch_size,
         shuffle=False,
-        num_workers=input_cfg.num_workers,
+        num_workers=0,# input_cfg.num_workers,
         pin_memory=False,
         collate_fn=merge_second_batch)
 
@@ -623,10 +628,20 @@ def evaluate(config_path,
     global_set = None
     print("Generate output labels...")
     bar = ProgressBar()
-    bar.start(len(eval_dataset) // input_cfg.batch_size + 1)
-
+    bar.start((len(eval_dataset) + batch_size - 1) // batch_size)
+    prep_example_times = []
+    prep_times = []
+    t2 = time.time()
     for example in iter(eval_dataloader):
-        example = example_convert_to_torch(example, float_dtype, device)
+        if measure_time:
+            prep_times.append(time.time() - t2)
+            t1 = time.time()
+            torch.cuda.synchronize()
+        example = example_convert_to_torch(example, float_dtype)
+        if measure_time:
+            torch.cuda.synchronize()
+            prep_example_times.append(time.time() - t1)
+
         if pickle_result:
             dt_annos += predict_kitti_to_anno(
                 net, example, class_names, center_limit_range,
@@ -634,26 +649,40 @@ def evaluate(config_path,
         else:
             _predict_kitti_to_file(net, example, result_path_step, class_names,
                                    center_limit_range, model_cfg.lidar_input)
+        # print(json.dumps(net.middle_feature_extractor.middle_conv.sparity_dict))
         bar.print_bar()
+        if measure_time:
+            t2 = time.time()
 
     sec_per_example = len(eval_dataset) / (time.time() - t)
     print(f'generate label finished({sec_per_example:.2f}/s). start eval:')
-
-    print(f"avg forward time per example: {net.avg_forward_time:.3f}")
-    print(f"avg postprocess time per example: {net.avg_postprocess_time:.3f}")
-    if device.type == 'cpu':
-        print("Evaluation only support gpu. exit.")
+    if measure_time:
+        print(f"avg example to torch time: {np.mean(prep_example_times) * 1000:.3f} ms")
+        print(f"avg prep time: {np.mean(prep_times) * 1000:.3f} ms")
+    for name, val in net.get_avg_time_dict().items():
+        print(f"avg {name} time = {val * 1000:.3f} ms")
     if not predict_test:
         gt_annos = [info["annos"] for info in eval_dataset.dataset.kitti_infos]
         if not pickle_result:
             dt_annos = kitti.get_label_annos(result_path_step)
         result = get_official_eval_result(gt_annos, dt_annos, class_names)
+        # print(json.dumps(result, indent=2))
         print(result)
         result = get_coco_eval_result(gt_annos, dt_annos, class_names)
         print(result)
         if pickle_result:
             with open(result_path_step / "result.pkl", 'wb') as f:
                 pickle.dump(dt_annos, f)
+
+
+def save_config(config_path, save_path):
+    config = pipeline_pb2.TrainEvalPipelineConfig()
+    with open(config_path, "r") as f:
+        proto_str = f.read()
+        text_format.Merge(proto_str, config)
+    ret = text_format.MessageToString(config, indent=2)
+    with open(save_path, 'w') as f:
+        f.write(ret)
 
 
 if __name__ == '__main__':

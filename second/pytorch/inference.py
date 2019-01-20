@@ -35,7 +35,10 @@ class TorchInferenceContext(InferenceContext):
         target_assigner = target_assigner_builder.build(
             target_assigner_cfg, bv_range, box_coder)
         self.target_assigner = target_assigner
-        out_size_factor = model_cfg.rpn.layer_strides[0] // model_cfg.rpn.upsample_strides[0]
+        out_size_factor = model_cfg.rpn.layer_strides[0] / model_cfg.rpn.upsample_strides[0]
+        out_size_factor *= model_cfg.middle_feature_extractor.downsample_factor
+        out_size_factor = int(out_size_factor)
+        assert out_size_factor > 0
         self.net = second_builder.build(model_cfg, voxel_generator,
                                           target_assigner)
         self.net.cuda().eval()
@@ -46,6 +49,7 @@ class TorchInferenceContext(InferenceContext):
         feature_map_size = grid_size[:2] // out_size_factor
         feature_map_size = [*feature_map_size, 1][::-1]
         ret = target_assigner.generate_anchors(feature_map_size)
+        anchors_dict = target_assigner.generate_anchors_dict(feature_map_size)
         anchors = ret["anchors"]
         anchors = anchors.reshape([-1, 7])
         matched_thresholds = ret["matched_thresholds"]
@@ -57,6 +61,7 @@ class TorchInferenceContext(InferenceContext):
             "anchors_bv": anchors_bv,
             "matched_thresholds": matched_thresholds,
             "unmatched_thresholds": unmatched_thresholds,
+            "anchors_dict": anchors_dict,
         }
 
     def _restore(self, ckpt_path):
@@ -68,15 +73,14 @@ class TorchInferenceContext(InferenceContext):
         train_cfg = self.config.train_config
         input_cfg = self.config.eval_input_reader
         model_cfg = self.config.model.second
-        example_torch = example_convert_to_torch(example)
         if train_cfg.enable_mixed_precision:
-            float_dtype = torch.float16
+            float_dtype = torch.half
         else:
             float_dtype = torch.float32
-
+        example_torch = example_convert_to_torch(example, float_dtype)
         result_annos = predict_kitti_to_anno(
             self.net, example_torch, list(
-                input_cfg.class_names),
+                self.target_assigner.classes),
             model_cfg.post_center_limit_range, model_cfg.lidar_input)
         return result_annos
 

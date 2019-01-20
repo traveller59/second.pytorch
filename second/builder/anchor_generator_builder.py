@@ -28,7 +28,7 @@ def build(anchor_config):
             rotations=list(config.rotations),
             match_threshold=config.matched_threshold,
             unmatch_threshold=config.unmatched_threshold,
-            class_id=config.class_name)
+            class_name=config.class_name)
         return ag
     elif ag_type == 'anchor_generator_range':
         config = anchor_config.anchor_generator_range
@@ -38,7 +38,7 @@ def build(anchor_config):
             rotations=list(config.rotations),
             match_threshold=config.matched_threshold,
             unmatch_threshold=config.unmatched_threshold,
-            class_id=config.class_name)
+            class_name=config.class_name)
         return ag
     else:
         raise ValueError(" unknown anchor generator type")

@@ -8,7 +8,7 @@ class AnchorGeneratorStride:
                  anchor_strides=[0.4, 0.4, 1.0],
                  anchor_offsets=[0.2, -39.8, -1.78],
                  rotations=[0, np.pi / 2],
-                 class_id=None,
+                 class_name=None,
                  match_threshold=-1,
                  unmatch_threshold=-1,
                  dtype=np.float32):
@@ -17,13 +17,13 @@ class AnchorGeneratorStride:
         self._anchor_offsets = anchor_offsets
         self._rotations = rotations
         self._dtype = dtype
-        self._class_id = class_id
+        self._class_name = class_name
         self._match_threshold = match_threshold
         self._unmatch_threshold = unmatch_threshold
 
     @property
-    def class_id(self):
-        return self._class_id
+    def class_name(self):
+        return self._class_name
 
     @property
     def match_threshold(self):
@@ -49,7 +49,7 @@ class AnchorGeneratorRange:
                  anchor_ranges,
                  sizes=[1.6, 3.9, 1.56],
                  rotations=[0, np.pi / 2],
-                 class_id=None,
+                 class_name=None,
                  match_threshold=-1,
                  unmatch_threshold=-1,
                  dtype=np.float32):
@@ -57,13 +57,13 @@ class AnchorGeneratorRange:
         self._anchor_ranges = anchor_ranges
         self._rotations = rotations
         self._dtype = dtype
-        self._class_id = class_id
+        self._class_name = class_name
         self._match_threshold = match_threshold
         self._unmatch_threshold = unmatch_threshold
 
     @property
-    def class_id(self):
-        return self._class_id
+    def class_name(self):
+        return self._class_name
 
     @property
     def match_threshold(self):
