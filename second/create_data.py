@@ -7,17 +7,8 @@ import numpy as np
 from skimage import io as imgio
 
 from second.core import box_np_ops
-from second.core.point_cloud.point_cloud_ops import bound_points_jit
 from second.data import kitti_common as kitti
 from second.utils.progress_bar import list_bar as prog_bar
-"""
-Note: tqdm has problem in my system(win10), so use my progress bar
-try:
-    from tqdm import tqdm as prog_bar
-except ImportError:
-    from second.utils.progress_bar import progress_bar_iter as prog_bar
-"""
-
 
 def _read_imageset_file(path):
     with open(path, 'r') as f:

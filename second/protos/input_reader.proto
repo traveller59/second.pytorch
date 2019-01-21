@@ -6,7 +6,6 @@ import "second/protos/target.proto";
 import "second/protos/preprocess.proto";
 import "second/protos/sampler.proto";
 message InputReader {
-  string record_file_path = 1;
   uint32 batch_size = 3;
   uint32 max_num_epochs = 4;
   uint32 prefetch_size = 5;
