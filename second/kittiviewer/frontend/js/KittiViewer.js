@@ -2,7 +2,7 @@ var KittiViewer = function (pointCloud, logger, imageCanvas) {
     this.rootPath = "/path/to/kitti";
     this.infoPath = "/path/to/infos.pkl";
     this.detPath = "/path/to/results.pkl";
-    this.backend = "http://127.0.0.1:7000";
+    this.backend = "http://127.0.0.1:16666";
     this.checkpointPath = "/path/to/tckpt";
     this.configPath = "/path/to/config";
     this.drawDet = false;
@@ -340,5 +340,30 @@ KittiViewer.prototype = {
         };
         image.src = this.image;
 
+    },
+    saveAsImage: function(renderer) {
+        var imgData, imgNode;
+        try {
+            var strMime = "image/jpeg";
+            var strDownloadMime = "image/octet-stream";
+            imgData = renderer.domElement.toDataURL(strMime);
+            this.saveFile(imgData.replace(strMime, strDownloadMime), `pc_${this.imageIndex}.jpg`);
+        } catch (e) {
+            console.log(e);
+            return;
+        }
+    },
+    saveFile : function (strData, filename) {
+        var link = document.createElement('a');
+        if (typeof link.download === 'string') {
+            document.body.appendChild(link); //Firefox requires the link to be in the body
+            link.download = filename;
+            link.href = strData;
+            link.click();
+            document.body.removeChild(link); //remove the link when done
+        } else {
+            location.replace(uri);
+        }
     }
+
 }

@@ -27,6 +27,14 @@ bev  AP:90.12, 87.87, 86.77
 3d   AP:88.62, 78.31, 76.62
 ```
 
+```car.fhd.onestage.config``` + 50 epochs + super converge (6.5 hours) +  (25 fps in 1080Ti):
+
+```
+Car AP@0.70, 0.70, 0.70:
+bbox AP:97.65, 89.59, 88.72
+bev  AP:90.38, 88.20, 86.98
+3d   AP:89.16, 78.78, 77.41
+```
 
 ## Install
 
