@@ -25,6 +25,7 @@ var KittiViewer = function (pointCloud, logger, imageCanvas) {
 };
 
 KittiViewer.prototype = {
+
     readCookies : function(){
         if (CookiesKitti.get("kittiviewer_backend")){
             this.backend = CookiesKitti.get("kittiviewer_backend");
@@ -45,6 +46,7 @@ KittiViewer.prototype = {
             this.infoPath = CookiesKitti.get("kittiviewer_infoPath");
         }
     },
+
     load: function () {
         let self = this;
         let data = {};
@@ -68,6 +70,7 @@ KittiViewer.prototype = {
             }
         });
     },
+
     addhttp: function (url) {
         if (!/^https?:\/\//i.test(url)) {
             url = 'http://' + url;
@@ -93,6 +96,7 @@ KittiViewer.prototype = {
             }
         });
     },
+
     buildNet: function( ){
         let self = this;
         let data = {};
@@ -112,6 +116,7 @@ KittiViewer.prototype = {
             }
         });
     },
+
     inference: function( ){
         let self = this;
         let data = {"image_idx": self.imageIndex};
@@ -153,9 +158,11 @@ KittiViewer.prototype = {
             }
         });
     },
+
     plot: function () {
         return this._plot(this.imageIndex);
     },
+
     next: function () {
         for (var i = 0; i < this.imageIndexes.length; ++i) {
             if (this.imageIndexes[i] == this.imageIndex) {
@@ -166,6 +173,7 @@ KittiViewer.prototype = {
             }
         }
     },
+
     prev: function () {
         for (var i = 0; i < this.imageIndexes.length; ++i) {
             if (this.imageIndexes[i] == this.imageIndex) {
@@ -176,6 +184,7 @@ KittiViewer.prototype = {
             }
         }
     },
+
     clear: function(){
         for (var i = 0; i < this.gtBoxes.length; ++i) {
             for (var j = this.gtBoxes[i].children.length - 1; j >= 0; j--) {
@@ -199,14 +208,33 @@ KittiViewer.prototype = {
         this.dtBboxes = [];
         // this.image = '';
     },
+
+    // load input and point cloud images
     _plot: function (image_idx) {
-        console.log(this.imageIndexes.length);
-        if (this.imageIndexes.length != 0 && this.imageIndexes.includes(image_idx)) {
+        
+        var imgLength = this.imageIndexes.length;
+
+        // handle errors 
+        // - exit when there are no more images
+        // - log if images are not loaded or not available
+        if (image_idx + 1 > imgLength ) {
+            console.log('no more images to process');
+            return;
+        } else if (imgLength === 0) {
+            this.logger.error("images are not loaded, please click load button!");
+            return;
+        } else if (!this.imageIndexes.includes(image_idx)) {
+            this.logger.error("image not available. Please check index");
+            return;
+        }
+
+        if (imgLength != 0 && this.imageIndexes.includes(image_idx)) {
             let data = {};
             data["image_idx"] = image_idx;
             data["with_det"] = this.drawDet;
             let self = this;
-            var ajax1 = $.ajax({
+            
+            var pointCloudReq = $.ajax({
                 url: this.addhttp(this.backend) + '/api/get_pointcloud',
                 method: 'POST',
                 contentType: "application/json",
@@ -215,7 +243,10 @@ KittiViewer.prototype = {
                     self.logger.error("get point cloud fail!!");
                     console.log("get point cloud fail!!");
                 },
+
+                // load point cloud images
                 success: function (response) {
+                    
                     self.clear();
                     response = response["results"][0];
                     var points_buf = str2buffer(atob(response["pointcloud"]));
@@ -267,52 +298,50 @@ KittiViewer.prototype = {
                         self.maxPoints));
                     self.pointCloud.geometry.attributes.position.needsUpdate = true;
                     self.pointCloud.geometry.computeBoundingSphere();
+                
                 }
             });
-            var ajax2 = $.ajax({
+
+            var imgFeedReq = $.ajax({
                 url: this.addhttp(this.backend) + '/api/get_image',
                 method: 'POST',
                 contentType: "application/json",
                 data: JSON.stringify(data),
                 error: function (jqXHR, exception) {
                     self.logger.error("get image fail!!");
-                    console.log("get image fail!!");
+                    console.log(exception);
                 },
                 success: function (response) {
                     response = response["results"][0];
                     self.image = response["image_b64"];
                 }
             });
-            $.when(ajax1, ajax2).done(function(){
+            $.when(pointCloudReq, imgFeedReq)
+            .then(() => {
                 // draw image, bbox
                 self.drawImage();
+            })
+            .done(() => {
+                this._plot(image_idx + 1);
             });
-        } else {
-            if (this.imageIndexes.length == 0){
-                this.logger.error("image indexes isn't load, please click load button!");
-                console.log("image indexes isn't load, please click load button!!");
-            }else{
-                this.logger.error("out of range!");
-                console.log("out of range!");
-            }
         }
     },
+
     drawImage : function(){
         if (this.image === ''){
-            console.log("??????");
             return;
         }
         let self = this;
         var image = new Image();
-        // image.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNk+M9Qz0AEYBxVSF+FAAhKDveksOjmAAAAAElFTkSuQmCC";
-        // console.log(response["image_b64"]);
+        image.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNk+M9Qz0AEYBxVSF+FAAhKDveksOjmAAAAAElFTkSuQmCC";
         image.onload = function() {
             let aspect = image.width / image.height;
             let w = self.imageCanvas.width;
             self.imageCanvas.height = w / aspect;
             let h = self.imageCanvas.height;
             let ctx = self.imageCanvas.getContext("2d");
-            console.log("draw image");
+            
+            // render top image
             ctx.drawImage(image, 0, 0, w, h);
             let x1, y1, x2, y2;
             for (var i = 0; i < self.gtBboxes.length; ++i){

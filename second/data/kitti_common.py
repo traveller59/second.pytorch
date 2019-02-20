@@ -75,7 +75,7 @@ def iou(boxes1, boxes2, add1=False):
 
 
 def get_image_index_str(img_idx):
-    return "{:06d}".format(img_idx)
+    return "0{:09d}".format(img_idx)
 
 
 def get_kitti_info_path(idx,
