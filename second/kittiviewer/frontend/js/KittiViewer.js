@@ -240,7 +240,6 @@ KittiViewer.prototype = {
             data: JSON.stringify(data),
             error: function (jqXHR, exception) {
                 self.logger.error("get point cloud fail!!");
-                console.log("get point cloud fail!!");
             },
 
             // load point cloud images
@@ -250,6 +249,7 @@ KittiViewer.prototype = {
                 response = response["results"][0];
                 var points_buf = str2buffer(atob(response["pointcloud"]));
                 var points = new Float32Array(points_buf);
+                
                 if (response.hasOwnProperty("dims")){
                     var locs = response["locs"];
                     var dims = response["dims"];
@@ -261,10 +261,11 @@ KittiViewer.prototype = {
                         self.gtBoxColor, labels,
                         self.gtLabelColor);    
                 }
-                // var boxes = boxEdge(dims, locs, rots, 2, "rgb(0, 255, 0)");
+
                 for (var i = 0; i < self.gtBoxes.length; ++i) {
                     scene.add(self.gtBoxes[i]);
                 }
+
                 if (self.drawDet && response.hasOwnProperty("dt_dims")) {
 
                     var locs = response["dt_locs"];
