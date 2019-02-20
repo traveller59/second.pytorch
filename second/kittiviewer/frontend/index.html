@@ -5,48 +5,30 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
         crossorigin="anonymous" />
     <link rel="stylesheet" type="text/css" href="css/main.css" media="screen" />
     <title>SECOND Kitti Viewer</title>
-    <script src="https://code.jquery.com/jquery-3.3.1.min.js"
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha384-tsQFqpEReu7ZLhBV2VZlAu7zcOV+rXbYlF2cqB8txI/8aZajjp4Bqd+V6D5IgvKT"
         crossorigin="anonymous"></script>
-<<<<<<< 17588b2a146bf2f42f1cd782553f3184daa6404f
     <script>window.jQuery || document.write('<script src="js/libs/jquery-3.3.1.min.js">\x3C/script>');</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
-=======
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
->>>>>>> enable images loop
         crossorigin="anonymous"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
         crossorigin="anonymous"></script>
-<<<<<<< 17588b2a146bf2f42f1cd782553f3184daa6404f
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/98/three.js" integrity="sha384-BMOR44t8p+yL7NVevEC9pO2y26JB6lv1mKFhit2zvzWq5jZo6RpIcTdg6MUxKQRP"
-=======
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/98/three.js"
->>>>>>> enable images loop
         crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.3/dat.gui.js"
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.3/dat.gui.js" integrity="sha384-S7m8CpjFEEXwHzEDZ8XdeFSO0rLzdK8x1e7pLuc2hx5Xr23XnaWvb0p/kIez3mxy"
         crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/5.3.0/math.js"
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/5.3.0/math.js" integrity="sha384-YILGCrKtrx9ucVIp2iNy85HZcWysS6pXa+tAW+Jbgxoi3TJJSCrg0fJG5C0AJzJO"
         crossorigin="anonymous"></script>
-<<<<<<< 17588b2a146bf2f42f1cd782553f3184daa6404f
-=======
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r16/Stats.min.js"
-        crossorigin="anonymous"></script>
->>>>>>> enable images loop
     <link href="https://cdn.jsdelivr.net/npm/jspanel4@4.3.0/dist/jspanel.css" rel="stylesheet" />
     <!-- jsPanel JavaScript -->
-    <script src="https://cdn.jsdelivr.net/npm/jspanel4@4.3.0/dist/jspanel.js"
+    <script src="https://cdn.jsdelivr.net/npm/jspanel4@4.3.0/dist/jspanel.js" integrity="sha384-2F3fGv9PeamJMmqDMSollVdfQqFsLLru6E0ed+AOHOq3tB2IyUDSyllqrQJqx2vp"
         crossorigin="anonymous"></script>
-<<<<<<< 17588b2a146bf2f42f1cd782553f3184daa6404f
     <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js" integrity="sha384-R4v5onSW2o3yhiPYUPN9ssGd9OmZdGRIdLmZgGst3fp0NhJDxYSSErv0YzWdeC/l" crossorigin="anonymous"></script>
-    <script>window.Cookies || document.write('<script src="js/libs/js.cookie.min.js">\x3C/script>');</script>
-=======
-    <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"
-        crossorigin="anonymous"></script>
->>>>>>> enable images loop
+<script>window.Cookies || document.write('<script src="js/libs/js.cookie.min.js">\x3C/script>');</script>
 
     <script src="js/MapControls.js"></script>
     <script src="js/SimplePlot.js"></script>
@@ -325,23 +307,14 @@
         });
 
         kittiGui.add(viewer, "buildNet");
-        /*
-        kittiGui.add(viewer, "imageIndex").listen();
-        var fixbugParam = {
-          changeImageIndex: viewer.imageIndex
-        };
-        kittiGui.add(fixbugParam, "changeImageIndex").onChange(function(val) {
-          viewer.imageIndex = val;
-        });
-        kittiGui.add(viewer, "plot");
-        kittiGui.add(viewer, "next");
-        kittiGui.add(viewer, "prev");
-        */
         kittiGui.add(viewer, "inference");
         viewer.screenshot = function(){
             viewer.saveAsImage(renderer);
         };
         kittiGui.add(viewer, "screenshot");
+        kittiGui.add(viewer, "animate").onChange(function (val) {
+            viewer.animate = val;
+        });
         kittiGui.open();
         var postGui = gui.addFolder("effect");
         postGui.add(postParams, "exposure", 0.1, 2).onChange(function (value) {
@@ -423,10 +396,9 @@
             return true;
         }
         $(".next")[0].onclick = function (e) {
-            console.log('next');
-            // viewer.next();
-            // $(".imgidx")[0].value = viewer.imageIndex.toString()
-            // return true;
+            viewer.next();
+            $(".imgidx")[0].value = viewer.imageIndex.toString()
+            return true;
         }
     </script>
 </body>

@@ -22,6 +22,7 @@ var KittiViewer = function (pointCloud, logger, imageCanvas) {
     this.logger = logger;
     this.imageCanvas = imageCanvas;
     this.image = '';
+    this.animate = false;
 };
 
 KittiViewer.prototype = {
@@ -218,7 +219,6 @@ KittiViewer.prototype = {
         // - exit when there are no more images
         // - log if images are not loaded or not available
         if (image_idx + 1 > imgLength ) {
-            console.log('no more images to process');
             return;
         } else if (imgLength === 0) {
             this.logger.error("images are not loaded, please click load button!");
@@ -227,104 +227,105 @@ KittiViewer.prototype = {
             this.logger.error("image not available. Please check index");
             return;
         }
+        
+        let data = {};
+        data["image_idx"] = image_idx;
+        data["with_det"] = this.drawDet;
+        let self = this;
+        
+        var pointCloudReq = $.ajax({
+            url: this.addhttp(this.backend) + '/api/get_pointcloud',
+            method: 'POST',
+            contentType: "application/json",
+            data: JSON.stringify(data),
+            error: function (jqXHR, exception) {
+                self.logger.error("get point cloud fail!!");
+                console.log("get point cloud fail!!");
+            },
 
-        if (imgLength != 0 && this.imageIndexes.includes(image_idx)) {
-            let data = {};
-            data["image_idx"] = image_idx;
-            data["with_det"] = this.drawDet;
-            let self = this;
-            
-            var pointCloudReq = $.ajax({
-                url: this.addhttp(this.backend) + '/api/get_pointcloud',
-                method: 'POST',
-                contentType: "application/json",
-                data: JSON.stringify(data),
-                error: function (jqXHR, exception) {
-                    self.logger.error("get point cloud fail!!");
-                    console.log("get point cloud fail!!");
-                },
-
-                // load point cloud images
-                success: function (response) {
-                    
-                    self.clear();
-                    response = response["results"][0];
-                    var points_buf = str2buffer(atob(response["pointcloud"]));
-                    var points = new Float32Array(points_buf);
-                    if (response.hasOwnProperty("dims")){
-                        var locs = response["locs"];
-                        var dims = response["dims"];
-    
-                        var rots = response["rots"];
-                        var labels = response["labels"];
-                        self.gtBboxes = response["bbox"];
-                        self.gtBoxes = boxEdgeWithLabel(dims, locs, rots, 2,
-                            self.gtBoxColor, labels,
-                            self.gtLabelColor);    
-                    }
-                    // var boxes = boxEdge(dims, locs, rots, 2, "rgb(0, 255, 0)");
-                    for (var i = 0; i < self.gtBoxes.length; ++i) {
-                        scene.add(self.gtBoxes[i]);
-                    }
-                    if (self.drawDet && response.hasOwnProperty("dt_dims")) {
-
-                        var locs = response["dt_locs"];
-                        var dims = response["dt_dims"];
-                        var rots = response["dt_rots"];
-                        var scores = response["dt_scores"];
-                        self.dtBboxes = response["dt_bbox"];
-                        let label_with_score = [];
-                        for (var i = 0; i < locs.length; ++i) {
-                            label_with_score.push("score=" + scores[i].toFixed(2).toString());
-                        }
-                        
-                        self.dtBoxes = boxEdgeWithLabel(dims, locs, rots, 2, self.dtBoxColor,
-                            label_with_score, self.dtLabelColor);
-                        for (var i = 0; i < self.dtBoxes.length; ++i) {
-                            scene.add(self.dtBoxes[i]);
-                        }
-                    }
-                    for (var i = 0; i < Math.min(points.length / 4, self.maxPoints); i++) {
-                        self.pointCloud.geometry.attributes.position.array[i * 3] = points[
-                            i * 4];
-                        self.pointCloud.geometry.attributes.position.array[i * 3 + 1] =
-                            points[i * 4 +
-                                1];
-                        self.pointCloud.geometry.attributes.position.array[i * 3 + 2] =
-                            points[i * 4 +
-                                2];
-                    }
-                    self.pointCloud.geometry.setDrawRange(0, Math.min(points.length / 4,
-                        self.maxPoints));
-                    self.pointCloud.geometry.attributes.position.needsUpdate = true;
-                    self.pointCloud.geometry.computeBoundingSphere();
+            // load point cloud images
+            success: function (response) {
                 
-                }
-            });
+                self.clear();
+                response = response["results"][0];
+                var points_buf = str2buffer(atob(response["pointcloud"]));
+                var points = new Float32Array(points_buf);
+                if (response.hasOwnProperty("dims")){
+                    var locs = response["locs"];
+                    var dims = response["dims"];
 
-            var imgFeedReq = $.ajax({
-                url: this.addhttp(this.backend) + '/api/get_image',
-                method: 'POST',
-                contentType: "application/json",
-                data: JSON.stringify(data),
-                error: function (jqXHR, exception) {
-                    self.logger.error("get image fail!!");
-                    console.log(exception);
-                },
-                success: function (response) {
-                    response = response["results"][0];
-                    self.image = response["image_b64"];
+                    var rots = response["rots"];
+                    var labels = response["labels"];
+                    self.gtBboxes = response["bbox"];
+                    self.gtBoxes = boxEdgeWithLabel(dims, locs, rots, 2,
+                        self.gtBoxColor, labels,
+                        self.gtLabelColor);    
                 }
-            });
-            $.when(pointCloudReq, imgFeedReq)
-            .then(() => {
-                // draw image, bbox
-                self.drawImage();
-            })
-            .done(() => {
+                // var boxes = boxEdge(dims, locs, rots, 2, "rgb(0, 255, 0)");
+                for (var i = 0; i < self.gtBoxes.length; ++i) {
+                    scene.add(self.gtBoxes[i]);
+                }
+                if (self.drawDet && response.hasOwnProperty("dt_dims")) {
+
+                    var locs = response["dt_locs"];
+                    var dims = response["dt_dims"];
+                    var rots = response["dt_rots"];
+                    var scores = response["dt_scores"];
+                    self.dtBboxes = response["dt_bbox"];
+                    let label_with_score = [];
+                    for (var i = 0; i < locs.length; ++i) {
+                        label_with_score.push("score=" + scores[i].toFixed(2).toString());
+                    }
+                    
+                    self.dtBoxes = boxEdgeWithLabel(dims, locs, rots, 2, self.dtBoxColor,
+                        label_with_score, self.dtLabelColor);
+                    for (var i = 0; i < self.dtBoxes.length; ++i) {
+                        scene.add(self.dtBoxes[i]);
+                    }
+                }
+                for (var i = 0; i < Math.min(points.length / 4, self.maxPoints); i++) {
+                    self.pointCloud.geometry.attributes.position.array[i * 3] = points[
+                        i * 4];
+                    self.pointCloud.geometry.attributes.position.array[i * 3 + 1] =
+                        points[i * 4 +
+                            1];
+                    self.pointCloud.geometry.attributes.position.array[i * 3 + 2] =
+                        points[i * 4 +
+                            2];
+                }
+                self.pointCloud.geometry.setDrawRange(0, Math.min(points.length / 4,
+                    self.maxPoints));
+                self.pointCloud.geometry.attributes.position.needsUpdate = true;
+                self.pointCloud.geometry.computeBoundingSphere();
+            
+            }
+        });
+
+        var imgFeedReq = $.ajax({
+            url: this.addhttp(this.backend) + '/api/get_image',
+            method: 'POST',
+            contentType: "application/json",
+            data: JSON.stringify(data),
+            error: function (jqXHR, exception) {
+                self.logger.error("get image fail!!");
+                console.log(exception);
+            },
+            success: function (response) {
+                response = response["results"][0];
+                self.image = response["image_b64"];
+            }
+        });
+        $.when(pointCloudReq, imgFeedReq)
+        .then(() => {
+            // draw image, bbox
+            self.drawImage();
+        })
+        .done(() => {
+            if (this.animate) {
                 this._plot(image_idx + 1);
-            });
-        }
+            }
+        });
+        
     },
 
     drawImage : function(){
@@ -370,6 +371,7 @@ KittiViewer.prototype = {
         image.src = this.image;
 
     },
+
     saveAsImage: function(renderer) {
         var imgData, imgNode;
         try {
@@ -382,6 +384,7 @@ KittiViewer.prototype = {
             return;
         }
     },
+    
     saveFile : function (strData, filename) {
         var link = document.createElement('a');
         if (typeof link.download === 'string') {
