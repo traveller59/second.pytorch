@@ -528,6 +528,8 @@ class VoxelNet(nn.Module):
                  encode_rad_error_by_sin=False,
                  loc_loss_ftor=None,
                  cls_loss_ftor=None,
+                 voxel_size=(0.2, 0.2, 4),
+                 pc_range=(0, -40, -3, 70.4, 40, 1),
                  name='voxelnet'):
         super().__init__()
         self.name = name
@@ -568,11 +570,21 @@ class VoxelNet(nn.Module):
             "PillarFeatureNet": PillarFeatureNet
         }
         vfe_class = vfe_class_dict[vfe_class_name]
-        self.voxel_feature_extractor = vfe_class(
-            num_input_features,
-            use_norm,
-            num_filters=vfe_num_filters,
-            with_distance=with_distance)
+        if vfe_class_name == "PillarFeatureNet":
+            self.voxel_feature_extractor = vfe_class(
+                num_input_features,
+                use_norm,
+                num_filters=vfe_num_filters,
+                with_distance=with_distance,
+                voxel_size=voxel_size,
+                pc_range=pc_range
+            )
+        else:
+            self.voxel_feature_extractor = vfe_class(
+                num_input_features,
+                use_norm,
+                num_filters=vfe_num_filters,
+                with_distance=with_distance)
 
         print("middle_class_name", middle_class_name)
         if middle_class_name == "PointPillarsScatter":
