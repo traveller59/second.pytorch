@@ -90,5 +90,7 @@ def build(model_cfg: second_pb2.VoxelNet, voxel_generator,
         loc_loss_ftor=loc_loss_ftor,
         cls_loss_ftor=cls_loss_ftor,
         target_assigner=target_assigner,
+        voxel_size=voxel_generator.voxel_size,
+        pc_range=voxel_generator.point_cloud_range
     )
     return net
