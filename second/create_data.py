@@ -7,6 +7,7 @@ import numpy as np
 from skimage import io as imgio
 
 from second.core import box_np_ops
+from second.core.point_cloud.point_cloud_ops import bound_points_jit
 from second.data import kitti_common as kitti
 from second.utils.progress_bar import list_bar as prog_bar
 
@@ -18,18 +19,21 @@ def _read_imageset_file(path):
 
 def _calculate_num_points_in_gt(data_path, infos, relative_path, remove_outside=True, num_features=4):
     for info in infos:
+        pc_info = info["point_cloud"]
+        image_info = info["image"]
+        calib = info["calib"]
         if relative_path:
-            v_path = str(pathlib.Path(data_path) / info["velodyne_path"])
+            v_path = str(pathlib.Path(data_path) / pc_info["velodyne_path"])
         else:
-            v_path = info["velodyne_path"]
+            v_path = pc_info["velodyne_path"]
         points_v = np.fromfile(
             v_path, dtype=np.float32, count=-1).reshape([-1, num_features])
-        rect = info['calib/R0_rect']
-        Trv2c = info['calib/Tr_velo_to_cam']
-        P2 = info['calib/P2']
+        rect = calib['R0_rect']
+        Trv2c = calib['Tr_velo_to_cam']
+        P2 = calib['P2']
         if remove_outside:
             points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
-                                                        info["img_shape"])
+                                                        image_info["image_shape"])
 
         # points_v = points_v[points_v[:, 0] > 0]
         annos = info['annos']
@@ -88,20 +92,6 @@ def create_kitti_info_file(data_path,
     print(f"Kitti info val file is saved to {filename}")
     with open(filename, 'wb') as f:
         pickle.dump(kitti_infos_val, f)
-    """
-    if create_trainval:
-        kitti_infos_trainval = kitti.get_kitti_image_info(
-            data_path,
-            training=True,
-            velodyne=True,
-            calib=True,
-            image_ids=trainval_img_ids,
-            relative_path=relative_path)
-        filename = save_path / 'kitti_infos_trainval.pkl'
-        print(f"Kitti info trainval file is saved to {filename}")
-        with open(filename, 'wb') as f:
-            pickle.dump(kitti_infos_trainval, f)
-    """
     filename = save_path / 'kitti_infos_trainval.pkl'
     print(f"Kitti info trainval file is saved to {filename}")
     with open(filename, 'wb') as f:
@@ -121,6 +111,7 @@ def create_kitti_info_file(data_path,
         pickle.dump(kitti_infos_test, f)
 
 
+
 def _create_reduced_point_cloud(data_path,
                                 info_path,
                                 save_path=None,
@@ -128,13 +119,17 @@ def _create_reduced_point_cloud(data_path,
     with open(info_path, 'rb') as f:
         kitti_infos = pickle.load(f)
     for info in prog_bar(kitti_infos):
-        v_path = info['velodyne_path']
+        pc_info = info["point_cloud"]
+        image_info = info["image"]
+        calib = info["calib"]
+
+        v_path = pc_info['velodyne_path']
         v_path = pathlib.Path(data_path) / v_path
         points_v = np.fromfile(
             str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
-        rect = info['calib/R0_rect']
-        P2 = info['calib/P2']
-        Trv2c = info['calib/Tr_velo_to_cam']
+        rect = calib['R0_rect']
+        P2 = calib['P2']
+        Trv2c = calib['Tr_velo_to_cam']
         # first remove z < 0 points
         # keep = points_v[:, -1] > 0
         # points_v = points_v[keep]
@@ -142,7 +137,7 @@ def _create_reduced_point_cloud(data_path,
         if back:
             points_v[:, 0] = -points_v[:, 0]
         points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
-                                                    info["img_shape"])
+                                                    image_info["image_shape"])
 
         if save_path is None:
             save_filename = v_path.parent.parent / (v_path.parent.stem + "_reduced") / v_path.name
@@ -181,7 +176,6 @@ def create_reduced_point_cloud(data_path,
         _create_reduced_point_cloud(
             data_path, test_info_path, save_path, back=True)
 
-
 def create_groundtruth_database(data_path,
                                 info_path=None,
                                 used_classes=None,
@@ -211,23 +205,27 @@ def create_groundtruth_database(data_path,
         all_db_infos[name] = []
     group_counter = 0
     for info in prog_bar(kitti_infos):
-        velodyne_path = info['velodyne_path']
+        pc_info = info["point_cloud"]
+        image_info = info["image"]
+        calib = info["calib"]
+
+        velodyne_path = pc_info['velodyne_path']
         if relative_path:
             # velodyne_path = str(root_path / velodyne_path) + "_reduced"
             velodyne_path = str(root_path / velodyne_path)
         num_features = 4
-        if 'pointcloud_num_features' in info:
-            num_features = info['pointcloud_num_features']
+        if 'num_features' in pc_info:
+            num_features = pc_info['num_features']
         points = np.fromfile(
             velodyne_path, dtype=np.float32, count=-1).reshape([-1, num_features])
 
-        image_idx = info["image_idx"]
-        rect = info['calib/R0_rect']
-        P2 = info['calib/P2']
-        Trv2c = info['calib/Tr_velo_to_cam']
+        image_idx = image_info["image_idx"]
+        rect = calib['R0_rect']
+        P2 = calib['P2']
+        Trv2c = calib['Tr_velo_to_cam']
         if not lidar_only:
             points = box_np_ops.remove_outside_points(points, rect, Trv2c, P2,
-                                                        info["img_shape"])
+                                                        image_info["image_shape"])
 
         annos = info["annos"]
         names = annos["name"]
@@ -237,6 +235,7 @@ def create_groundtruth_database(data_path,
         num_obj = np.sum(annos["index"] >= 0)
         rbbox_cam = kitti.anno_to_rbboxes(annos)[:num_obj]
         rbbox_lidar = box_np_ops.box_camera_to_lidar(rbbox_cam, rect, Trv2c)
+        box_np_ops.change_box3d_center_(rbbox_lidar, [0.5, 0.5, 0], [0.5, 0.5, 0.5])
         if bev_only: # set z and h to limits
             assert coors_range is not None
             rbbox_lidar[:, 2] = coors_range[2]
