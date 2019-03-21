@@ -195,9 +195,9 @@ def prep_pointcloud(input_dict,
         points = points[masks.any(-1)]
 
     if training:
-        boxes_lidar = gt_dict["gt_boxes"]
-        bev_map = simplevis.kitti_vis(points, boxes_lidar)
-        cv2.imshow('pre-noise', bev_map)
+        # boxes_lidar = gt_dict["gt_boxes"]
+        # bev_map = simplevis.kitti_vis(points, boxes_lidar)
+        # cv2.imshow('pre-noise', bev_map)
         selected = kitti.drop_arrays_by_name(gt_dict["gt_names"], ["DontCare"])
         _dict_select(gt_dict, selected)
         if remove_unknown:
@@ -287,10 +287,10 @@ def prep_pointcloud(input_dict,
         gt_dict["gt_boxes"][:, 6] = box_np_ops.limit_period(
             gt_dict["gt_boxes"][:, 6], offset=0.5, period=2 * np.pi)
 
-        boxes_lidar = gt_dict["gt_boxes"]
-        bev_map = simplevis.kitti_vis(points, boxes_lidar)
-        cv2.imshow('post-noise', bev_map)
-        cv2.waitKey(0)
+        # boxes_lidar = gt_dict["gt_boxes"]
+        # bev_map = simplevis.kitti_vis(points, boxes_lidar)
+        # cv2.imshow('post-noise', bev_map)
+        # cv2.waitKey(0)
 
     if shuffle_points:
         # shuffle is a little slow.
