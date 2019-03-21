@@ -8,7 +8,7 @@ points([N, 4])->voxels([N, 5, 4])->Features([N, 4])->Sparse Convolution Networks
 3. Super converge (from fastai) is implemented. Now all network can converge to a good result with only 50~80 epoch. For example. ```car.fhd.config``` only needs 50 epochs to reach 78.3 AP (car mod 3d).
 4. Target assigner now works correctly when using multi-class.
 
-# Release 1.51
+# Release 1.5.1
 
 ## Minor Improvements and Bug fixes
 
