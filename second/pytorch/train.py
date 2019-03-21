@@ -10,8 +10,9 @@ import numpy as np
 import torch
 from google.protobuf import text_format
 from tensorboardX import SummaryWriter
-
+import copy
 import torchplus
+from second.core import box_np_ops
 import second.data.kitti_common as kitti
 from second.builder import target_assigner_builder, voxel_builder
 from second.data.preprocess import merge_second_batch
@@ -21,7 +22,7 @@ from second.pytorch.builder import (box_coder_builder, input_reader_builder,
                                       second_builder)
 from second.utils.eval import get_coco_eval_result, get_official_eval_result
 from second.utils.progress_bar import ProgressBar
-
+from second.utils.log_tool import metric_to_str, flat_nested_json_dict
 
 def _get_pos_neg_loss(cls_loss, labels):
     # cls_loss: [N, num_anchors, num_class]
@@ -40,37 +41,16 @@ def _get_pos_neg_loss(cls_loss, labels):
     return cls_pos_loss, cls_neg_loss
 
 
-def _flat_nested_json_dict(json_dict, flatted, sep=".", start=""):
-    for k, v in json_dict.items():
-        if isinstance(v, dict):
-            _flat_nested_json_dict(v, flatted, sep, start + sep + k)
-        else:
-            flatted[start + sep + k] = v
-
-
-def flat_nested_json_dict(json_dict, sep=".") -> dict:
-    """flat a nested json-like dict. this function make shadow copy.
-    """
-    flatted = {}
-    for k, v in json_dict.items():
-        if isinstance(v, dict):
-            _flat_nested_json_dict(v, flatted, sep, k)
-        else:
-            flatted[k] = v
-    return flatted
-
-
 def example_convert_to_torch(example, dtype=torch.float32,
                              device=None) -> dict:
     device = device or torch.device("cuda:0")
     example_torch = {}
     float_names = [
-        "voxels", "anchors", "reg_targets", "reg_weights", "bev_map", "rect",
-        "Trv2c", "P2"
+        "voxels", "anchors", "reg_targets", "reg_weights", "bev_map"
     ]
-
     for k, v in example.items():
         if k in float_names:
+            # slow when directly provide fp32 data with dtype=torch.half
             example_torch[k] = torch.tensor(v, dtype=torch.float32, device=device).to(dtype)
         elif k in ["coordinates", "labels", "num_points"]:
             example_torch[k] = torch.tensor(
@@ -78,10 +58,25 @@ def example_convert_to_torch(example, dtype=torch.float32,
         elif k in ["anchors_mask"]:
             example_torch[k] = torch.tensor(
                 v, dtype=torch.uint8, device=device)
+        elif k == "calib":
+            calib = {}
+            for k1, v1 in v.items():
+                calib[k1] = torch.tensor(v1, dtype=dtype, device=device).to(dtype)
+            example_torch[k] = calib
         else:
             example_torch[k] = v
     return example_torch
 
+def build_network(model_cfg, measure_time=False):
+    voxel_generator = voxel_builder.build(model_cfg.voxel_generator)
+    bv_range = voxel_generator.point_cloud_range[[0, 1, 3, 4]]
+    box_coder = box_coder_builder.build(model_cfg.box_coder)
+    target_assigner_cfg = model_cfg.target_assigner
+    target_assigner = target_assigner_builder.build(target_assigner_cfg,
+                                                    bv_range, box_coder)
+    class_names = target_assigner.classes
+    net = second_builder.build(model_cfg, voxel_generator, target_assigner, measure_time=measure_time)
+    return net
 
 def train(config_path,
           model_dir,
@@ -90,51 +85,47 @@ def train(config_path,
           display_step=50,
           summary_step=5,
           pickle_result=True,
-          patchs=None):
+          resume=False):
     """train a VoxelNet model specified by a config file.
     """
     if create_folder:
         if pathlib.Path(model_dir).exists():
             model_dir = torchplus.train.create_folder(model_dir)
-    patchs = patchs or []
     model_dir = pathlib.Path(model_dir)
+    if not resume and model_dir.exists():
+        raise ValueError("model dir exists and you don't specify resume.")
     model_dir.mkdir(parents=True, exist_ok=True)
     if result_path is None:
         result_path = model_dir / 'results'
     config_file_bkp = "pipeline.config"
-    config = pipeline_pb2.TrainEvalPipelineConfig()
-    with open(config_path, "r") as f:
-        proto_str = f.read()
-        text_format.Merge(proto_str, config)
-    for patch in patchs:
-        patch = "config." + patch 
-        exec(patch)
-    shutil.copyfile(config_path, str(model_dir / config_file_bkp))
+    if isinstance(config_path, str):
+        # directly provide a config object. this usually used 
+        # when you want to train with several different parameters in
+        # one script.
+        config = pipeline_pb2.TrainEvalPipelineConfig()
+        with open(config_path, "r") as f:
+            proto_str = f.read()
+            text_format.Merge(proto_str, config)
+    else:
+        config = config_path
+        proto_str = text_format.MessageToString(config, indent=2)
+    with (model_dir / config_file_bkp).open("w") as f:
+        f.write(proto_str)
+
     input_cfg = config.train_input_reader
     eval_input_cfg = config.eval_input_reader
     model_cfg = config.model.second
     train_cfg = config.train_config
 
-    
-    ######################
-    # BUILD VOXEL GENERATOR
-    ######################
-    voxel_generator = voxel_builder.build(model_cfg.voxel_generator)
-    ######################
-    # BUILD TARGET ASSIGNER
-    ######################
-    bv_range = voxel_generator.point_cloud_range[[0, 1, 3, 4]]
-    box_coder = box_coder_builder.build(model_cfg.box_coder)
-    target_assigner_cfg = model_cfg.target_assigner
-    target_assigner = target_assigner_builder.build(target_assigner_cfg,
-                                                    bv_range, box_coder)
+    net = build_network(model_cfg).cuda()
+    if train_cfg.enable_mixed_precision:
+        net.half()
+        net.metrics_to_float()
+        net.convert_norm_to_float(net)
+    target_assigner = net.target_assigner
+    voxel_generator = net.voxel_generator
     class_names = target_assigner.classes
-    ######################
-    # BUILD NET
-    ######################
-    center_limit_range = model_cfg.post_center_limit_range
-    net = second_builder.build(model_cfg, voxel_generator, target_assigner)
-    net.cuda()
+    
     # net_train = torch.nn.DataParallel(net).cuda()
     print("num_trainable parameters:", len(list(net.parameters())))
     # for n, p in net.named_parameters():
@@ -146,13 +137,10 @@ def train(config_path,
     torchplus.train.try_restore_latest_checkpoints(model_dir, [net])
     gstep = net.get_global_step() - 1
     optimizer_cfg = train_cfg.optimizer
-    if train_cfg.enable_mixed_precision:
-        net.half()
-        net.metrics_to_float()
-        net.convert_norm_to_float(net)
     loss_scale = train_cfg.loss_scale_factor
     mixed_optimizer = optimizer_builder.build(optimizer_cfg, net, mixed=train_cfg.enable_mixed_precision, loss_scale=loss_scale)
     optimizer = mixed_optimizer
+    center_limit_range = model_cfg.post_center_limit_range
     """
     if train_cfg.enable_mixed_precision:
         mixed_optimizer = torchplus.train.MixedPrecisionWrapper(
@@ -171,7 +159,6 @@ def train(config_path,
     ######################
     # PREPARE INPUT
     ######################
-
     dataset = input_reader_builder.build(
         input_cfg,
         model_cfg,
@@ -184,7 +171,6 @@ def train(config_path,
         training=False,
         voxel_generator=voxel_generator,
         target_assigner=target_assigner)
-
     def _worker_init_fn(worker_id):
         time_seed = np.array(time.time(), dtype=np.int32)
         np.random.seed(time_seed + worker_id)
@@ -317,10 +303,9 @@ def train(config_path,
                     #     mixed_optimizer.param_groups[0]['lr'])
                     metrics["lr"] = float(
                         optimizer.lr)
-
-                    metrics["image_idx"] = example['image_idx'][0]
+                    if "image_info" in example['metadata'][0]:
+                        metrics["image_idx"] = example['metadata'][0]["image_info"]['image_idx']
                     training_detail.append(metrics)
-                    flatted_metrics = flat_nested_json_dict(metrics)
                     flatted_summarys = flat_nested_json_dict(metrics, "/")
                     """
                     for k, v in flatted_summarys.items():
@@ -330,19 +315,7 @@ def train(config_path,
                         else:
                             writer.add_scalar(k, v, global_step)
                     """
-                    metrics_str_list = []
-                    for k, v in flatted_metrics.items():
-                        if isinstance(v, float):
-                            metrics_str_list.append(f"{k}={v:.3}")
-                        elif isinstance(v, (list, tuple)):
-                            if v and isinstance(v[0], float):
-                                v_str = ', '.join([f"{e:.3}" for e in v])
-                                metrics_str_list.append(f"{k}=[{v_str}]")
-                            else:
-                                metrics_str_list.append(f"{k}={v}")
-                        else:
-                            metrics_str_list.append(f"{k}={v}")
-                    log_str = ', '.join(metrics_str_list)
+                    log_str = metric_to_str(metrics)
                     print(log_str, file=logf)
                     print(log_str)
                 ckpt_elasped_time = time.time() - ckpt_start_time
@@ -371,15 +344,9 @@ def train(config_path,
             prog_bar.start((len(eval_dataset) + eval_input_cfg.batch_size - 1) // eval_input_cfg.batch_size)
             for example in iter(eval_dataloader):
                 example = example_convert_to_torch(example, float_dtype)
-                if pickle_result:
-                    dt_annos += predict_kitti_to_anno(
-                        net, example, class_names, center_limit_range,
-                        model_cfg.lidar_input)
-                else:
-                    _predict_kitti_to_file(net, example, result_path_step,
-                                           class_names, center_limit_range,
-                                           model_cfg.lidar_input)
-
+                dt_annos += predict_to_kitti_label(
+                    net, example, class_names, center_limit_range,
+                    model_cfg.lidar_input)
                 prog_bar.print_bar()
 
             sec_per_ex = len(eval_dataset) / (time.time() - t)
@@ -388,24 +355,18 @@ def train(config_path,
             print(
                 f'generate label finished({sec_per_ex:.2f}/s). start eval:',
                 file=logf)
-            gt_annos = [
-                info["annos"] for info in eval_dataset.dataset.kitti_infos
-            ]
-            if not pickle_result:
-                dt_annos = kitti.get_label_annos(result_path_step)
-            # result = get_official_eval_result_v2(gt_annos, dt_annos, class_names)
-            # print(json.dumps(result, indent=2), file=logf)
-            result = get_official_eval_result(gt_annos, dt_annos, class_names)
-            print(result, file=logf)
-            print(result)
-            writer.add_text('eval_result', json.dumps(result, indent=2), global_step)
-            result = get_coco_eval_result(gt_annos, dt_annos, class_names)
-            print(result, file=logf)
-            print(result)
+            result_official, result_coco = eval_dataset.dataset.evaluation(dt_annos)
+            print(result_official)
+            print(result_official, file=logf)
+            print(result_coco)
+            print(result_coco, file=logf)
             if pickle_result:
                 with open(result_path_step / "result.pkl", 'wb') as f:
                     pickle.dump(dt_annos, f)
-            writer.add_text('eval_result', result, global_step)
+            else:
+                kitti_anno_to_label_file(dt_annos, result_path_step)
+            writer.add_text('eval_result', result_official, global_step)
+            writer.add_text('eval_result coco', result_coco, global_step)
             net.train()
     except Exception as e:
         torchplus.train.save_models(model_dir, [net, optimizer],
@@ -418,159 +379,126 @@ def train(config_path,
     logf.close()
 
 
-def _predict_kitti_to_file(net,
-                           example,
-                           result_save_path,
-                           class_names,
-                           center_limit_range=None,
-                           lidar_input=False):
-    batch_image_shape = example['image_shape']
-    batch_imgidx = example['image_idx']
-    predictions_dicts = net(example)
-    # t = time.time()
-    for i, preds_dict in enumerate(predictions_dicts):
-        image_shape = batch_image_shape[i]
-        img_idx = preds_dict["image_idx"]
-        if preds_dict["bbox"] is not None or preds_dict["bbox"].size.numel():
-            box_2d_preds = preds_dict["bbox"].data.cpu().numpy()
-            box_preds = preds_dict["box3d_camera"].data.cpu().numpy()
-            scores = preds_dict["scores"].data.cpu().numpy()
-            box_preds_lidar = preds_dict["box3d_lidar"].data.cpu().numpy()
-            # write pred to file
-            box_preds = box_preds[:, [0, 1, 2, 4, 5, 3,
-                                      6]]  # lhw->hwl(label file format)
-            label_preds = preds_dict["label_preds"].data.cpu().numpy()
-            # label_preds = np.zeros([box_2d_preds.shape[0]], dtype=np.int32)
-            result_lines = []
-            for box, box_lidar, bbox, score, label in zip(
-                    box_preds, box_preds_lidar, box_2d_preds, scores,
-                    label_preds):
-                if not lidar_input:
-                    if bbox[0] > image_shape[1] or bbox[1] > image_shape[0]:
-                        continue
-                    if bbox[2] < 0 or bbox[3] < 0:
-                        continue
-                # print(img_shape)
-                if center_limit_range is not None:
-                    limit_range = np.array(center_limit_range)
-                    if (np.any(box_lidar[:3] < limit_range[:3])
-                            or np.any(box_lidar[:3] > limit_range[3:])):
-                        continue
-                bbox[2:] = np.minimum(bbox[2:], image_shape[::-1])
-                bbox[:2] = np.maximum(bbox[:2], [0, 0])
-                result_dict = {
-                    'name': class_names[int(label)],
-                    'alpha': -np.arctan2(-box_lidar[1], box_lidar[0]) + box[6],
-                    'bbox': bbox,
-                    'location': box[:3],
-                    'dimensions': box[3:6],
-                    'rotation_y': box[6],
-                    'score': score,
-                }
-                result_line = kitti.kitti_result_line(result_dict)
-                result_lines.append(result_line)
-        else:
-            result_lines = []
-        result_file = f"{result_save_path}/{kitti.get_image_index_str(img_idx)}.txt"
-        result_str = '\n'.join(result_lines)
-        with open(result_file, 'w') as f:
-            f.write(result_str)
-
-
-def predict_kitti_to_anno(net,
+def predict_to_kitti_label(net,
                           example,
                           class_names,
                           center_limit_range=None,
-                          lidar_input=False,
-                          global_set=None):
-    batch_image_shape = example['image_shape']
-    batch_imgidx = example['image_idx']
+                          lidar_input=False):
     predictions_dicts = net(example)
-    # t = time.time()
+    limit_range = None
+    if center_limit_range is not None:
+        limit_range = np.array(center_limit_range)
     annos = []
     for i, preds_dict in enumerate(predictions_dicts):
-        image_shape = batch_image_shape[i]
-        img_idx = preds_dict["image_idx"]
-        if preds_dict["bbox"] is not None or preds_dict["bbox"].size.numel() != 0:
-            box_2d_preds = preds_dict["bbox"].detach().cpu().numpy()
-            box_preds = preds_dict["box3d_camera"].detach().cpu().numpy()
-            scores = preds_dict["scores"].detach().cpu().numpy()
-            box_preds_lidar = preds_dict["box3d_lidar"].detach().cpu().numpy()
-            # write pred to file
-            label_preds = preds_dict["label_preds"].detach().cpu().numpy()
-            # label_preds = np.zeros([box_2d_preds.shape[0]], dtype=np.int32)
-            anno = kitti.get_start_result_anno()
-            num_example = 0
-            for box, box_lidar, bbox, score, label in zip(
-                    box_preds, box_preds_lidar, box_2d_preds, scores,
-                    label_preds):
-                if not lidar_input:
-                    if bbox[0] > image_shape[1] or bbox[1] > image_shape[0]:
-                        continue
-                    if bbox[2] < 0 or bbox[3] < 0:
-                        continue
-                # print(img_shape)
-                if center_limit_range is not None:
-                    limit_range = np.array(center_limit_range)
-                    if (np.any(box_lidar[:3] < limit_range[:3])
-                            or np.any(box_lidar[:3] > limit_range[3:])):
-                        continue
-                bbox[2:] = np.minimum(bbox[2:], image_shape[::-1])
-                bbox[:2] = np.maximum(bbox[:2], [0, 0])
-                anno["name"].append(class_names[int(label)])
-                anno["truncated"].append(0.0)
-                anno["occluded"].append(0)
-                anno["alpha"].append(-np.arctan2(-box_lidar[1], box_lidar[0]) +
-                                     box[6])
-                anno["bbox"].append(bbox)
-                anno["dimensions"].append(box[3:6])
-                anno["location"].append(box[:3])
-                anno["rotation_y"].append(box[6])
-                if global_set is not None:
-                    for i in range(100000):
-                        if score in global_set:
-                            score -= 1 / 100000
-                        else:
-                            global_set.add(score)
-                            break
-                anno["score"].append(score)
-
-                num_example += 1
-            if num_example != 0:
-                anno = {n: np.stack(v) for n, v in anno.items()}
-                annos.append(anno)
+        box3d_lidar = preds_dict["box3d_lidar"].detach().cpu().numpy()
+        box3d_camera = None
+        scores = preds_dict["scores"].detach().cpu().numpy()
+        label_preds = preds_dict["label_preds"].detach().cpu().numpy()
+        if "box3d_camera" in preds_dict:
+            box3d_camera = preds_dict["box3d_camera"].detach().cpu().numpy()
+        bbox = None
+        if "bbox" in preds_dict:
+            bbox = preds_dict["bbox"].detach().cpu().numpy()
+        anno = kitti.get_start_result_anno()
+        num_example = 0
+        for j in range(box3d_lidar.shape[0]):
+            if limit_range is not None:
+                if (np.any(box3d_lidar[j, :3] < limit_range[:3])
+                        or np.any(box3d_lidar[j, :3] > limit_range[3:])):
+                    continue
+            if "bbox" in preds_dict:
+                assert "image_shape" in preds_dict["metadata"]["image"]
+                image_shape = preds_dict["metadata"]["image"]["image_shape"]
+                if bbox[j, 0] > image_shape[1] or bbox[j, 1] > image_shape[0]:
+                    continue
+                if bbox[j, 2] < 0 or bbox[j, 3] < 0:
+                    continue
+                bbox[j, 2:] = np.minimum(bbox[j, 2:], image_shape[::-1])
+                bbox[j, :2] = np.maximum(bbox[j, :2], [0, 0])
+                anno["bbox"].append(bbox[j])
+                # convert center format to kitti format
+                # box3d_lidar[j, 2] -= box3d_lidar[j, 5] / 2
+                anno["alpha"].append(-np.arctan2(-box3d_lidar[j, 1], box3d_lidar[j, 0]) +
+                                    box3d_camera[j, 6])
+                anno["dimensions"].append(box3d_camera[j, 3:6])
+                anno["location"].append(box3d_camera[j, :3])
+                anno["rotation_y"].append(box3d_camera[j, 6])
             else:
-                annos.append(kitti.empty_result_anno())
+                # bbox's height must higher than 25, otherwise filtered during eval
+                anno["bbox"].append(np.array([0, 0, 50, 50]))
+                # note that if you use raw lidar data to eval,
+                # you will get strange performance because
+                # in standard KITTI eval, instance with small bbox height
+                # will be filtered. but it is impossible to filter
+                # boxes when using raw data.
+                anno["alpha"].append(0.0)
+                anno["dimensions"].append(box3d_lidar[j, 3:6])
+                anno["location"].append(box3d_lidar[j, :3])
+                anno["rotation_y"].append(box3d_lidar[j, 6])
+
+            anno["name"].append(class_names[int(label_preds[j])])
+            anno["truncated"].append(0.0)
+            anno["occluded"].append(0)
+            anno["score"].append(scores[j])
+
+            num_example += 1
+        if num_example != 0:
+            anno = {n: np.stack(v) for n, v in anno.items()}
+            annos.append(anno)
         else:
             annos.append(kitti.empty_result_anno())
         num_example = annos[-1]["name"].shape[0]
-        annos[-1]["image_idx"] = np.array(
-            [img_idx] * num_example, dtype=np.int64)
+        annos[-1]["metadata"] = preds_dict["metadata"]
     return annos
 
 
+def kitti_anno_to_label_file(annos, folder):
+    folder = pathlib.Path(folder)
+    for anno in annos:
+        image_idx = anno["metadata"]["image"]["image_idx"]
+        label_lines = []
+        for j in range(anno["bbox"].shape[0]):
+            label_dict = {
+                'name': anno["name"][j],
+                'alpha': anno["alpha"][j],
+                'bbox': anno["bbox"][j],
+                'location': anno["location"][j],
+                'dimensions': anno["dimensions"][j],
+                'rotation_y': anno["rotation_y"][j],
+                'score': anno["score"][j],
+            }
+            label_line = kitti.kitti_result_line(label_dict)
+            label_lines.append(label_line)
+        label_file = folder / f"{kitti.get_image_index_str(image_idx)}.txt"
+        label_str = '\n'.join(label_lines)
+        with open(label_file, 'w') as f:
+            f.write(label_str)
+
+
 def evaluate(config_path,
-             model_dir,
+             model_dir=None,
              result_path=None,
-             predict_test=False,
              ckpt_path=None,
              ref_detfile=None,
              pickle_result=True,
              measure_time=False,
              batch_size=None):
-    model_dir = pathlib.Path(model_dir)
-    if predict_test:
-        result_name = 'predict_test'
-    else:
-        result_name = 'eval_results'
+    result_name = 'eval_results'
     if result_path is None:
+        model_dir = pathlib.Path(model_dir)
         result_path = model_dir / result_name
     else:
         result_path = pathlib.Path(result_path)
-    config = pipeline_pb2.TrainEvalPipelineConfig()
-    with open(config_path, "r") as f:
-        proto_str = f.read()
-        text_format.Merge(proto_str, config)
+    if isinstance(config_path, str):
+        # directly provide a config object. this usually used 
+        # when you want to eval with several different parameters in
+        # one script.
+        config = pipeline_pb2.TrainEvalPipelineConfig()
+        with open(config_path, "r") as f:
+            proto_str = f.read()
+            text_format.Merge(proto_str, config)
+    else:
+        config = config_path
 
     input_cfg = config.eval_input_reader
     model_cfg = config.model.second
@@ -580,26 +508,22 @@ def evaluate(config_path,
     ######################
     # BUILD VOXEL GENERATOR
     ######################
-    voxel_generator = voxel_builder.build(model_cfg.voxel_generator)
-    bv_range = voxel_generator.point_cloud_range[[0, 1, 3, 4]]
-    box_coder = box_coder_builder.build(model_cfg.box_coder)
-    target_assigner_cfg = model_cfg.target_assigner
-    target_assigner = target_assigner_builder.build(target_assigner_cfg,
-                                                    bv_range, box_coder)
-    class_names = target_assigner.classes
-
-    net = second_builder.build(model_cfg, voxel_generator, target_assigner, measure_time=measure_time)
-    net.cuda()
-
-    if ckpt_path is None:
-        torchplus.train.try_restore_latest_checkpoints(model_dir, [net])
-    else:
-        torchplus.train.restore(ckpt_path, net)
+    net = build_network(model_cfg, measure_time=measure_time).cuda()
     if train_cfg.enable_mixed_precision:
         net.half()
         print("half inference!")
         net.metrics_to_float()
         net.convert_norm_to_float(net)
+    target_assigner = net.target_assigner
+    voxel_generator = net.voxel_generator
+    class_names = target_assigner.classes
+
+    if ckpt_path is None:
+        assert model_dir is not None
+        torchplus.train.try_restore_latest_checkpoints(model_dir, [net])
+    else:
+        torchplus.train.restore(ckpt_path, net)
+
     batch_size = batch_size or input_cfg.batch_size
     eval_dataset = input_reader_builder.build(
         input_cfg,
@@ -625,7 +549,6 @@ def evaluate(config_path,
     result_path_step.mkdir(parents=True, exist_ok=True)
     t = time.time()
     dt_annos = []
-    global_set = None
     print("Generate output labels...")
     bar = ProgressBar()
     bar.start((len(eval_dataset) + batch_size - 1) // batch_size)
@@ -641,14 +564,9 @@ def evaluate(config_path,
         if measure_time:
             torch.cuda.synchronize()
             prep_example_times.append(time.time() - t1)
-
-        if pickle_result:
-            dt_annos += predict_kitti_to_anno(
+        dt_annos += predict_to_kitti_label(
                 net, example, class_names, center_limit_range,
-                model_cfg.lidar_input, global_set)
-        else:
-            _predict_kitti_to_file(net, example, result_path_step, class_names,
-                                   center_limit_range, model_cfg.lidar_input)
+                model_cfg.lidar_input)
         # print(json.dumps(net.middle_feature_extractor.middle_conv.sparity_dict))
         bar.print_bar()
         if measure_time:
@@ -661,18 +579,16 @@ def evaluate(config_path,
         print(f"avg prep time: {np.mean(prep_times) * 1000:.3f} ms")
     for name, val in net.get_avg_time_dict().items():
         print(f"avg {name} time = {val * 1000:.3f} ms")
-    if not predict_test:
-        gt_annos = [info["annos"] for info in eval_dataset.dataset.kitti_infos]
-        if not pickle_result:
-            dt_annos = kitti.get_label_annos(result_path_step)
-        result = get_official_eval_result(gt_annos, dt_annos, class_names)
-        # print(json.dumps(result, indent=2))
-        print(result)
-        result = get_coco_eval_result(gt_annos, dt_annos, class_names)
-        print(result)
-        if pickle_result:
-            with open(result_path_step / "result.pkl", 'wb') as f:
-                pickle.dump(dt_annos, f)
+    if pickle_result:
+        with open(result_path_step / "result.pkl", 'wb') as f:
+            pickle.dump(dt_annos, f)
+    else:
+        kitti_anno_to_label_file(dt_annos, result_path_step)
+
+    result_official, result_coco = eval_dataset.dataset.evaluation(dt_annos)
+    if result_official is not None:
+        print(result_official)
+        print(result_coco)
 
 
 def save_config(config_path, save_path):

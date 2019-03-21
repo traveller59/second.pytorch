@@ -7,17 +7,28 @@ import time
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+import fire
+
+import io as sysio
+import json
 import pickle
 import sys
+import time
 from functools import partial
 from pathlib import Path
+import datetime
+import fire
+import matplotlib.pyplot as plt
+import numba
+import skimage
+from shapely.geometry import Polygon
+from skimage import io
 
 import second.core.box_np_ops as box_np_ops
 import second.core.preprocess as prep
 from second.core.box_coders import GroundBox3dCoder
 from second.core.region_similarity import (
     DistanceSimilarity, NearestIouSimilarity, RotateIouSimilarity)
-from second.core.sample_ops import DataBaseSamplerV2
 from second.core.target_assigner import TargetAssigner
 from second.data import kitti_common as kitti
 from second.protos import pipeline_pb2
@@ -73,7 +84,7 @@ def readinfo():
     with open(info_path, 'rb') as f:
         kitti_infos = pickle.load(f)
     BACKEND.kitti_infos = kitti_infos
-    BACKEND.image_idxes = [info["image_idx"] for info in kitti_infos]
+    BACKEND.image_idxes = [info["image"]["image_idx"] for info in kitti_infos]
     response["image_indexes"] = BACKEND.image_idxes
 
     response = jsonify(results=[response])
@@ -112,12 +123,19 @@ def get_pointcloud():
     if BACKEND.kitti_infos is None:
         return error_response("kitti info is not loaded")
     image_idx = instance["image_idx"]
+    enable_int16 = instance["enable_int16"]
+    
     idx = BACKEND.image_idxes.index(image_idx)
     kitti_info = BACKEND.kitti_infos[idx]
-    rect = kitti_info['calib/R0_rect']
-    P2 = kitti_info['calib/P2']
-    Trv2c = kitti_info['calib/Tr_velo_to_cam']
-    img_shape = kitti_info["img_shape"] # hw
+    pc_info = kitti_info["point_cloud"]
+    image_info = kitti_info["image"]
+    calib = kitti_info["calib"]
+
+    rect = calib['R0_rect']
+    Trv2c = calib['Tr_velo_to_cam']
+    P2 = calib['P2']
+
+    img_shape = image_info["image_shape"] # hw
     wh = np.array(img_shape[::-1])
     whwh = np.tile(wh, 2)
     if 'annos' in kitti_info:
@@ -143,10 +161,22 @@ def get_pointcloud():
         response["bbox"] = bbox.tolist()
         
         response["labels"] = labels[:num_obj].tolist()
-
-    v_path = str(Path(BACKEND.root_path) / kitti_info['velodyne_path'])
-    with open(v_path, 'rb') as f:
-        pc_str = base64.encodestring(f.read())
+    response["num_features"] = pc_info["num_features"]
+    v_path = str(Path(BACKEND.root_path) / pc_info['velodyne_path'])
+    points = np.fromfile(
+        v_path, dtype=np.float32, count=-1).reshape([-1, pc_info["num_features"]])
+    if instance['remove_outside']:
+        if  'image_shape' in image_info:
+            image_shape = image_info['image_shape']
+            points = box_np_ops.remove_outside_points(
+                points, rect, Trv2c, P2, image_shape)
+        else:
+            points = points[points[..., 2] > 0]
+    if enable_int16:
+        int16_factor = instance["int16_factor"]
+        points *= int16_factor
+        points = points.astype(np.int16)
+    pc_str = base64.b64encode(points.tobytes())
     response["pointcloud"] = pc_str.decode("utf-8")
     if "with_det" in instance and instance["with_det"]:
         if BACKEND.dt_annos is None:
@@ -178,7 +208,7 @@ def get_pointcloud():
     #     response["score"] = score.tolist()
     response = jsonify(results=[response])
     response.headers['Access-Control-Allow-Headers'] = '*'
-    print("send response!")
+    print("send response with size {}!".format(len(pc_str)))
     return response
 
 @app.route('/api/get_image', methods=['POST'])
@@ -193,25 +223,16 @@ def get_image():
     image_idx = instance["image_idx"]
     idx = BACKEND.image_idxes.index(image_idx)
     kitti_info = BACKEND.kitti_infos[idx]
-    rect = kitti_info['calib/R0_rect']
-    P2 = kitti_info['calib/P2']
-    Trv2c = kitti_info['calib/Tr_velo_to_cam']
-    if 'img_path' in kitti_info:
-        img_path = kitti_info['img_path']
-        if img_path != "":
-            image_path = BACKEND.root_path / img_path
+    image_info = kitti_info["image"]
+    if 'image_path' in image_info:
+        image_path = image_info['image_path']
+        if image_path != "":
+            image_path = BACKEND.root_path / image_path
             print(image_path)
             with open(str(image_path), 'rb') as f:
                 image_str = f.read()
             response["image_b64"] = base64.b64encode(image_str).decode("utf-8")
             response["image_b64"] = 'data:image/{};base64,'.format(image_path.suffix[1:]) + response["image_b64"]
-            '''# 
-            response["rect"] = rect.tolist()
-            response["P2"] = P2.tolist()
-            response["Trv2c"] = Trv2c.tolist()
-            response["L2CMat"] = ((rect @ Trv2c).T).tolist()
-            response["C2LMat"] = np.linalg.inv((rect @ Trv2c).T).tolist()
-            '''
             print("send an image with size {}!".format(len(response["image_b64"])))
     response = jsonify(results=[response])
     response.headers['Access-Control-Allow-Headers'] = '*'
@@ -253,24 +274,30 @@ def inference_by_idx():
     if BACKEND.inference_ctx is None:
         return error_response("inference_ctx is not loaded")
     image_idx = instance["image_idx"]
+    remove_outside = instance["remove_outside"]
     idx = BACKEND.image_idxes.index(image_idx)
     kitti_info = BACKEND.kitti_infos[idx]
+    pc_info = kitti_info["point_cloud"]
+    image_info = kitti_info["image"]
+    calib = kitti_info["calib"]
 
-    v_path = str(Path(BACKEND.root_path) / kitti_info['velodyne_path'])
+    v_path = str(Path(BACKEND.root_path) / pc_info['velodyne_path'])
     num_features = 4
     points = np.fromfile(
         str(v_path), dtype=np.float32,
         count=-1).reshape([-1, num_features])
-    rect = kitti_info['calib/R0_rect']
-    P2 = kitti_info['calib/P2']
-    Trv2c = kitti_info['calib/Tr_velo_to_cam']
-    if 'img_shape' in kitti_info:
-        image_shape = kitti_info['img_shape']
+    
+
+    rect = calib['R0_rect']
+    Trv2c = calib['Tr_velo_to_cam']
+    P2 = calib['P2']
+    if remove_outside and 'image_shape' in image_info:
+        image_shape = image_info['image_shape']
         points = box_np_ops.remove_outside_points(
             points, rect, Trv2c, P2, image_shape)
         print(points.shape[0])
-    img_shape = kitti_info["img_shape"] # hw
-    wh = np.array(img_shape[::-1])
+    image_shape = image_info["image_shape"] # hw
+    wh = np.array(image_shape[::-1])
     whwh = np.tile(wh, 2)
 
     t = time.time()

@@ -31,8 +31,6 @@ def second_box_encode(boxes, anchors, encode_angle_to_vector=False, smooth_dim=F
     # need to convert boxes to z-center format
     xa, ya, za, wa, la, ha, ra = np.split(anchors, 7, axis=-1)
     xg, yg, zg, wg, lg, hg, rg = np.split(boxes, 7, axis=-1)
-    zg = zg + hg / 2
-    za = za + ha / 2
     diagonal = np.sqrt(la**2 + wa**2)  # 4.3
     xt = (xg - xa) / diagonal
     yt = (yg - ya) / diagonal
@@ -71,7 +69,6 @@ def second_box_decode(box_encodings, anchors, encode_angle_to_vector=False, smoo
         xt, yt, zt, wt, lt, ht, rtx, rty = np.split(box_encodings, 8, axis=-1)
     else:
         xt, yt, zt, wt, lt, ht, rt = np.split(box_encodings, 7, axis=-1)
-    za = za + ha / 2
     diagonal = np.sqrt(la**2 + wa**2)
     xg = xt * diagonal + xa
     yg = yt * diagonal + ya
@@ -93,7 +90,6 @@ def second_box_decode(box_encodings, anchors, encode_angle_to_vector=False, smoo
         rg = np.arctan2(rgy, rgx)
     else:
         rg = rt + ra
-    zg = zg - hg / 2
     return np.concatenate([xg, yg, zg, wg, lg, hg, rg], axis=-1)
 
 def bev_box_encode(boxes, anchors, encode_angle_to_vector=False, smooth_dim=False):
@@ -328,7 +324,7 @@ def rotation_box(box_corners, angle):
 def center_to_corner_box3d(centers,
                            dims,
                            angles=None,
-                           origin=[0.5, 1.0, 0.5],
+                           origin=0.5,
                            axis=1):
     """convert kitti locations, dimensions and angles to corners
     
@@ -399,7 +395,7 @@ def box2d_to_corner_jit(boxes):
     return box_corners
 
 
-def rbbox3d_to_corners(rbboxes, origin=[0.5, 0.5, 0.0], axis=2):
+def rbbox3d_to_corners(rbboxes, origin=0.5, axis=2):
     return center_to_corner_box3d(
         rbboxes[..., :3],
         rbboxes[..., 3:6],
@@ -847,7 +843,7 @@ def assign_label_to_voxel(gt_boxes, coors, voxel_size, coors_range):
         gt_boxes[:, :3] - voxel_size * 0.5,
         gt_boxes[:, 3:6] + voxel_size,
         gt_boxes[:, 6],
-        origin=[0.5, 0.5, 0],
+        origin=0.5,
         axis=2)
     gt_surfaces = corner_to_surfaces_3d(gt_box_corners)
     ret = points_in_convex_polygon_3d_jit(voxel_centers, gt_surfaces)

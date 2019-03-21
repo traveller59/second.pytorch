@@ -9,7 +9,7 @@ from second.core.inference import InferenceContext
 from second.builder import target_assigner_builder, voxel_builder
 from second.pytorch.builder import box_coder_builder, second_builder
 from second.pytorch.models.voxelnet import VoxelNet
-from second.pytorch.train import predict_kitti_to_anno, example_convert_to_torch
+from second.pytorch.train import predict_to_kitti_label, example_convert_to_torch
 
 
 class TorchInferenceContext(InferenceContext):
@@ -38,7 +38,6 @@ class TorchInferenceContext(InferenceContext):
         out_size_factor = model_cfg.rpn.layer_strides[0] / model_cfg.rpn.upsample_strides[0]
         out_size_factor *= model_cfg.middle_feature_extractor.downsample_factor
         out_size_factor = int(out_size_factor)
-        assert out_size_factor > 0
         self.net = second_builder.build(model_cfg, voxel_generator,
                                           target_assigner)
         self.net.cuda().eval()
@@ -56,13 +55,14 @@ class TorchInferenceContext(InferenceContext):
         unmatched_thresholds = ret["unmatched_thresholds"]
         anchors_bv = box_np_ops.rbbox2d_to_near_bbox(
             anchors[:, [0, 1, 3, 4, 6]])
-        self.anchor_cache = {
+        anchor_cache = {
             "anchors": anchors,
             "anchors_bv": anchors_bv,
             "matched_thresholds": matched_thresholds,
             "unmatched_thresholds": unmatched_thresholds,
             "anchors_dict": anchors_dict,
         }
+        self.anchor_cache = anchor_cache
 
     def _restore(self, ckpt_path):
         ckpt_path = Path(ckpt_path)
@@ -73,12 +73,8 @@ class TorchInferenceContext(InferenceContext):
         train_cfg = self.config.train_config
         input_cfg = self.config.eval_input_reader
         model_cfg = self.config.model.second
-        if train_cfg.enable_mixed_precision:
-            float_dtype = torch.half
-        else:
-            float_dtype = torch.float32
-        example_torch = example_convert_to_torch(example, float_dtype)
-        result_annos = predict_kitti_to_anno(
+        example_torch = example_convert_to_torch(example)
+        result_annos = predict_to_kitti_label(
             self.net, example_torch, list(
                 self.target_assigner.classes),
             model_cfg.post_center_limit_range, model_cfg.lidar_input)

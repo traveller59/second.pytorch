@@ -650,12 +650,11 @@ def noise_per_object_v3_(gt_boxes,
                              gt_boxes[:, 6], group_centers, valid_mask)
         group_nums = np.array(list(group_id_num_dict.values()), dtype=np.int64)
 
-    origin = [0.5, 0.5, 0]
     gt_box_corners = box_np_ops.center_to_corner_box3d(
         gt_boxes[:, :3],
         gt_boxes[:, 3:6],
         gt_boxes[:, 6],
-        origin=origin,
+        origin=0.5,
         axis=2)
     if group_ids is not None:
         if not enable_grot:
@@ -728,12 +727,11 @@ def noise_per_object_v2_(gt_boxes,
         grot_uppers[..., np.newaxis],
         size=[num_boxes, num_try])
 
-    origin = [0.5, 0.5, 0]
     gt_box_corners = box_np_ops.center_to_corner_box3d(
         gt_boxes[:, :3],
         gt_boxes[:, 3:6],
         gt_boxes[:, 6],
-        origin=origin,
+        origin=0.5,
         axis=2)
     if np.abs(global_random_rot_range[0] - global_random_rot_range[1]) < 1e-3:
         selected_noise = noise_per_box(gt_boxes[:, [0, 1, 3, 4, 6]],

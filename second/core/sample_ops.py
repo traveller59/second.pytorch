@@ -99,9 +99,7 @@ class DataBaseSamplerV2:
                    num_point_features,
                    random_crop=False,
                    gt_group_ids=None,
-                   rect=None,
-                   Trv2c=None,
-                   P2=None):
+                   calib=None):
         sampled_num_dict = {}
         sample_num_per_class = []
         for class_name, max_sample_num in zip(self._sample_classes,
@@ -180,6 +178,9 @@ class DataBaseSamplerV2:
             # if np.random.choice([False, True], replace=False, p=[0.3, 0.7]):
             # do random crop.
             if random_crop:
+                rect = calib["rect"]
+                Trv2c = calib["Trv2c"]
+                P2 = calib["P2"]
                 s_points_list_new = []
                 gt_bboxes = box_np_ops.box3d_to_bbox(sampled_gt_boxes, rect,
                                                      Trv2c, P2)

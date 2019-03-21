@@ -6,7 +6,7 @@ from google.protobuf import text_format
 
 from second.data.preprocess import merge_second_batch, prep_pointcloud
 from second.protos import pipeline_pb2
-
+import second.data.kitti_common as kitti
 
 class InferenceContext:
     def __init__(self):
@@ -23,23 +23,36 @@ class InferenceContext:
         assert self.voxel_generator is not None
         assert self.config is not None
         assert self.built is True
-        rect = info['calib/R0_rect']
-        P2 = info['calib/P2']
-        Trv2c = info['calib/Tr_velo_to_cam']
+        kitti.convert_to_kitti_info_version2(info)
+        pc_info = info["point_cloud"]
+        image_info = info["image"]
+        calib = info["calib"]
+
+        rect = calib['R0_rect']
+        Trv2c = calib['Tr_velo_to_cam']
+        P2 = calib['P2']
+
         input_cfg = self.config.eval_input_reader
         model_cfg = self.config.model.second
 
         input_dict = {
             'points': points,
-            'rect': rect,
-            'Trv2c': Trv2c,
-            'P2': P2,
-            'image_shape': np.array(info["img_shape"], dtype=np.int32),
-            'image_idx': info['image_idx'],
-            'image_path': info['img_path'],
-            # 'pointcloud_num_features': num_point_features,
+            "calib": {
+                'rect': rect,
+                'Trv2c': Trv2c,
+                'P2': P2,
+            },
+            "image": {
+                'image_shape': np.array(image_info["image_shape"], dtype=np.int32),
+                'image_idx': image_info['image_idx'],
+                'image_path': image_info['image_path'],
+            },
         }
-        out_size_factor = model_cfg.rpn.layer_strides[0] // model_cfg.rpn.upsample_strides[0]
+        out_size_factor = np.prod(model_cfg.rpn.layer_strides)
+        if len(model_cfg.rpn.upsample_strides) > 0:
+            out_size_factor /= model_cfg.rpn.upsample_strides[-1]
+        out_size_factor *= model_cfg.middle_feature_extractor.downsample_factor
+        out_size_factor = int(out_size_factor)
         example = prep_pointcloud(
             input_dict=input_dict,
             root_path=str(self.root_path),
@@ -57,9 +70,10 @@ class InferenceContext:
             anchor_cache=self.anchor_cache,
             out_size_factor=out_size_factor,
             out_dtype=np.float32)
-        example["image_idx"] = info['image_idx']
-        example["image_shape"] = input_dict["image_shape"]
-        example["points"] = points
+        example["metadata"] = {}
+        if "image" in info:
+            example["metadata"]["image"] = input_dict["image"]
+
         if "anchors_mask" in example:
             example["anchors_mask"] = example["anchors_mask"].astype(np.uint8)
         #############

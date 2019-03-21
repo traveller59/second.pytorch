@@ -4,7 +4,7 @@ from second.data.preprocess import prep_pointcloud
 import numpy as np
 from second.builder import dbsampler_builder
 from functools import partial
-
+from second.utils import config_tool
 
 def build(input_reader_config,
           model_config,
@@ -29,11 +29,7 @@ def build(input_reader_config,
     generate_bev = model_config.use_bev
     without_reflectivity = model_config.without_reflectivity
     num_point_features = model_config.num_point_features
-    out_size_factor = model_config.rpn.layer_strides[0] / model_config.rpn.upsample_strides[0]
-    out_size_factor *= model_config.middle_feature_extractor.downsample_factor
-    out_size_factor = int(out_size_factor)
-    assert out_size_factor > 0
-
+    downsample_factor = config_tool.get_downsample_factor(model_config)
     cfg = input_reader_config
     db_sampler_cfg = input_reader_config.database_sampler
     db_sampler = None
@@ -45,8 +41,9 @@ def build(input_reader_config,
         u_db_sampler = dbsampler_builder.build(u_db_sampler_cfg)
     grid_size = voxel_generator.grid_size
     # [352, 400]
-    feature_map_size = grid_size[:2] // out_size_factor
+    feature_map_size = grid_size[:2] // downsample_factor
     feature_map_size = [*feature_map_size, 1][::-1]
+    print("feature_map_size", feature_map_size)
     assert all([n != '' for n in target_assigner.classes]), "you must specify class_name in anchor_generators."
     prep_func = partial(
         prep_pointcloud,
@@ -77,7 +74,7 @@ def build(input_reader_config,
         remove_points_after_sample=cfg.remove_points_after_sample,
         remove_environment=cfg.remove_environment,
         use_group_id=cfg.use_group_id,
-        out_size_factor=out_size_factor)
+        downsample_factor=downsample_factor)
     dataset = KittiDataset(
         info_path=cfg.kitti_info_path,
         root_path=cfg.kitti_root_path,

@@ -5,7 +5,10 @@ ONLY support python 3.6+, pytorch 1.0.0+. Tested in Ubuntu 16.04/18.04.
 
 ## News
 
+2019-3-21: SECOND V1.51 (minor improvement and bug fix) released! See [release notes](RELEASE.md) for more details.
+
 2019-1-20: SECOND V1.5 released! See [release notes](RELEASE.md) for more details.
+
 
 ### Performance in KITTI validation set (50/50 split)
 

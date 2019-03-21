@@ -22,6 +22,9 @@ var KittiViewer = function (pointCloud, logger, imageCanvas) {
     this.logger = logger;
     this.imageCanvas = imageCanvas;
     this.image = '';
+    this.enableInt16 = true;
+    this.int16Factor = 100;
+    this.removeOutside = true;
 };
 
 KittiViewer.prototype = {
@@ -114,7 +117,7 @@ KittiViewer.prototype = {
     },
     inference: function( ){
         let self = this;
-        let data = {"image_idx": self.imageIndex};
+        let data = {"image_idx": self.imageIndex, "remove_outside": self.removeOutside};
         return $.ajax({
             url: this.addhttp(this.backend) + '/api/inference_by_idx',
             method: 'POST',
@@ -205,6 +208,9 @@ KittiViewer.prototype = {
             let data = {};
             data["image_idx"] = image_idx;
             data["with_det"] = this.drawDet;
+            data["enable_int16"] = this.enableInt16;
+            data["int16_factor"] = this.int16Factor;
+            data["remove_outside"] = this.removeOutside;
             let self = this;
             var ajax1 = $.ajax({
                 url: this.addhttp(this.backend) + '/api/get_pointcloud',
@@ -219,18 +225,23 @@ KittiViewer.prototype = {
                     self.clear();
                     response = response["results"][0];
                     var points_buf = str2buffer(atob(response["pointcloud"]));
-                    var points = new Float32Array(points_buf);
-                    if (response.hasOwnProperty("dims")){
-                        var locs = response["locs"];
-                        var dims = response["dims"];
-    
-                        var rots = response["rots"];
-                        var labels = response["labels"];
-                        self.gtBboxes = response["bbox"];
-                        self.gtBoxes = boxEdgeWithLabel(dims, locs, rots, 2,
-                            self.gtBoxColor, labels,
-                            self.gtLabelColor);    
+                    var points;
+                    if (self.enableInt16){
+                        var points = new Int16Array(points_buf);
                     }
+                    else{
+                        var points = new Float32Array(points_buf);
+                    }
+                    var numFeatures = response["num_features"];
+                    var locs = response["locs"];
+                    var dims = response["dims"];
+
+                    var rots = response["rots"];
+                    var labels = response["labels"];
+                    self.gtBboxes = response["bbox"];
+                    self.gtBoxes = boxEdgeWithLabel(dims, locs, rots, 2,
+                        self.gtBoxColor, labels,
+                        self.gtLabelColor);
                     // var boxes = boxEdge(dims, locs, rots, 2, "rgb(0, 255, 0)");
                     for (var i = 0; i < self.gtBoxes.length; ++i) {
                         scene.add(self.gtBoxes[i]);
@@ -242,6 +253,7 @@ KittiViewer.prototype = {
                         var rots = response["dt_rots"];
                         var scores = response["dt_scores"];
                         self.dtBboxes = response["dt_bbox"];
+                        console.log("draw det", dims.length);
                         let label_with_score = [];
                         for (var i = 0; i < locs.length; ++i) {
                             label_with_score.push("score=" + scores[i].toFixed(2).toString());
@@ -253,17 +265,18 @@ KittiViewer.prototype = {
                             scene.add(self.dtBoxes[i]);
                         }
                     }
-                    for (var i = 0; i < Math.min(points.length / 4, self.maxPoints); i++) {
-                        self.pointCloud.geometry.attributes.position.array[i * 3] = points[
-                            i * 4];
-                        self.pointCloud.geometry.attributes.position.array[i * 3 + 1] =
-                            points[i * 4 +
-                                1];
-                        self.pointCloud.geometry.attributes.position.array[i * 3 + 2] =
-                            points[i * 4 +
-                                2];
+                    for (var i = 0; i < Math.min(points.length / numFeatures, self.maxPoints); i++) {
+                        for (var j = 0; j < numFeatures; ++j){
+                            self.pointCloud.geometry.attributes.position.array[i * 3 + j] = points[
+                                i * numFeatures + j];
+                        }
                     }
-                    self.pointCloud.geometry.setDrawRange(0, Math.min(points.length / 4,
+                    if (self.enableInt16){
+                        for (var i = 0; i < self.pointCloud.geometry.attributes.position.array.length; i++) {
+                            self.pointCloud.geometry.attributes.position.array[i] /=self.int16Factor;
+                        }    
+                    }
+                    self.pointCloud.geometry.setDrawRange(0, Math.min(points.length / numFeatures,
                         self.maxPoints));
                     self.pointCloud.geometry.attributes.position.needsUpdate = true;
                     self.pointCloud.geometry.computeBoundingSphere();
@@ -296,7 +309,7 @@ KittiViewer.prototype = {
                 console.log("out of range!");
             }
         }
-    },
+    },    
     drawImage : function(){
         if (this.image === ''){
             console.log("??????");

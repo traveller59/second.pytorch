@@ -20,8 +20,6 @@ def second_box_encode(boxes, anchors, encode_angle_to_vector=False, smooth_dim=F
     """
     xa, ya, za, wa, la, ha, ra = torch.split(anchors, 1, dim=-1)
     xg, yg, zg, wg, lg, hg, rg = torch.split(boxes, 1, dim=-1)
-    za = za + ha / 2
-    zg = zg + hg / 2
     diagonal = torch.sqrt(la**2 + wa**2)
     xt = (xg - xa) / diagonal
     yt = (yg - ya) / diagonal
@@ -65,7 +63,6 @@ def second_box_decode(box_encodings, anchors, encode_angle_to_vector=False, smoo
         xt, yt, zt, wt, lt, ht, rt = torch.split(box_encodings, 1, dim=-1)
 
     # xt, yt, zt, wt, lt, ht, rt = torch.split(box_encodings, 1, dim=-1)
-    za = za + ha / 2
     diagonal = torch.sqrt(la**2 + wa**2)
     xg = xt * diagonal + xa
     yg = yt * diagonal + ya
@@ -87,7 +84,6 @@ def second_box_decode(box_encodings, anchors, encode_angle_to_vector=False, smoo
         rg = torch.atan2(rgy, rgx)
     else:
         rg = rt + ra
-    zg = zg - hg / 2
     return torch.cat([xg, yg, zg, wg, lg, hg, rg], dim=-1)
 
 def bev_box_encode(boxes, anchors, encode_angle_to_vector=False, smooth_dim=False):
@@ -301,7 +297,7 @@ def rotation_2d(points, angles):
 def center_to_corner_box3d(centers,
                            dims,
                            angles,
-                           origin=[0.5, 1.0, 0.5],
+                           origin=0.5,
                            axis=1):
     """convert kitti locations, dimensions and angles to corners
     

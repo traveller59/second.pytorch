@@ -267,7 +267,8 @@
         // pointParicle.position.needsUpdate = true; // required after the first render
         var gui = new dat.GUI();
         var coreParams = {
-            backgroundcolor: "#000000"
+            backgroundcolor: "#000000",
+            useCameraHelper: true,
         };
         var cameraGui = gui.addFolder("core");
         cameraGui.add(camera, "fov");
@@ -276,6 +277,16 @@
             .onChange(function (value) {
                 renderer.setClearColor(value, 1);
             });
+        /*
+        cameraGui.add(coreParams, "useCameraHelper")
+        .onChange(function (value) {
+                if (value){
+                    scene.remove(camhelper);
+                }else{
+                    scene.add(camhelper);
+                }
+            });
+        */
         cameraGui.open();
         var kittiGui = gui.addFolder("kitti controllers");
         kittiGui.add(viewer, "backend").onChange(function (value) {
@@ -320,6 +331,10 @@
         kittiGui.add(viewer, "prev");
         */
         kittiGui.add(viewer, "inference");
+        kittiGui.add(viewer, "enableInt16");
+        kittiGui.add(viewer, "int16Factor", 1, 200);
+        kittiGui.add(viewer, "removeOutside");
+
         viewer.screenshot = function(){
             viewer.saveAsImage(renderer);
         };
@@ -386,6 +401,7 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             camhelper.update();
+            
             renderer.setSize(window.innerWidth, window.innerHeight);
             labelRenderer.setSize(window.innerWidth, window.innerHeight);
         }
