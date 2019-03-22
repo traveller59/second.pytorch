@@ -19,3 +19,4 @@ points([N, 4])->voxels([N, 5, 4])->Features([N, 4])->Sparse Convolution Networks
 2. Better RPN, you can add custom block by inherit RPNBase and implement _make_layer method.
 3. Update pretrained model.
 4. Add a simple inference notebook. everyone should start this project by that notebook.
+5. Add windows support. Training on windows is slow than linux.

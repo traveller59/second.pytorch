@@ -21,7 +21,6 @@ import fire
 import matplotlib.pyplot as plt
 import numba
 import skimage
-from shapely.geometry import Polygon
 from skimage import io
 
 import second.core.box_np_ops as box_np_ops

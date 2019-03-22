@@ -78,6 +78,11 @@ def build_network(model_cfg, measure_time=False):
     net = second_builder.build(model_cfg, voxel_generator, target_assigner, measure_time=measure_time)
     return net
 
+def _worker_init_fn(worker_id):
+    time_seed = np.array(time.time(), dtype=np.int32)
+    np.random.seed(time_seed + worker_id)
+    print(f"WORKER {worker_id} seed:", np.random.get_state()[1][0])
+
 def train(config_path,
           model_dir,
           result_path=None,
@@ -171,10 +176,6 @@ def train(config_path,
         training=False,
         voxel_generator=voxel_generator,
         target_assigner=target_assigner)
-    def _worker_init_fn(worker_id):
-        time_seed = np.array(time.time(), dtype=np.int32)
-        np.random.seed(time_seed + worker_id)
-        print(f"WORKER {worker_id} seed:", np.random.get_state()[1][0])
 
     dataloader = torch.utils.data.DataLoader(
         dataset,

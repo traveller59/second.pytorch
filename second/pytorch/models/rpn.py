@@ -2,7 +2,6 @@ import time
 from enum import Enum
 
 import numpy as np
-import sparseconvnet as scn
 import torch
 from torch import nn
 from torch.nn import functional as F

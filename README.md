@@ -1,7 +1,7 @@
 # SECOND-V1.5 for KITTI object detection
 SECOND-V1.5 detector.
 
-ONLY support python 3.6+, pytorch 1.0.0+. Tested in Ubuntu 16.04/18.04.
+ONLY support python 3.6+, pytorch 1.0.0+. Tested in Ubuntu 16.04/18.04/Windows 10.
 
 ## News
 
@@ -53,13 +53,17 @@ cd ./second.pytorch/second
 It is recommend to use Anaconda package manager.
 
 ```bash
-pip install shapely fire pybind11 tensorboardX protobuf scikit-image numba pillow
+conda install scikit-image scipy numba pillow matplotlib
+```
+
+```bash
+pip install fire tensorboardX protobuf opencv-python
 ```
 
 If you don't have Anaconda:
 
 ```bash
-pip install numba
+pip install numba scikit-image scipy pillow
 ```
 
 Follow instructions in [spconv](https://github.com/traveller59/spconv) to install spconv. 
