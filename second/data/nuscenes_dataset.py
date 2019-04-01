@@ -60,7 +60,7 @@ class NuScenesDataset(Dataset):
             if v.lower() in ["car", "pedestrian"
                              ]:  # we only eval these classes in kitti
                 self._kitti_name_mapping[k] = v
-        self.version = "v1.0-mini"
+        self.version = "v1.0-trainval"
         self.eval_version = "cvpr_2019"
 
     def __len__(self):
