@@ -13,6 +13,8 @@ ONLY support python 3.6+, pytorch 1.0.0+. Tested in Ubuntu 16.04/18.04/Windows 1
 
 See [release notes](RELEASE.md) for more details.
 
+_WARNING_: you should rerun info generation after every code update.
+
 ### Performance in KITTI validation set (50/50 split)
 
 ```car.fhd.config``` + 160 epochs (25 fps in 1080Ti):

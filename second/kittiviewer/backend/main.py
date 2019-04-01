@@ -131,11 +131,17 @@ def get_image():
         return error_response("root path is not set")    
     image_idx = instance["image_idx"]
     idx = BACKEND.image_idxes.index(image_idx)
-    sensor_data = BACKEND.dataset.get_sensor_data(idx)
-    if "cam2" in sensor_data:
-        image_str = sensor_data["cam2"]["data"]
+    query = {
+        "lidar": {
+            "idx": idx
+        },
+        "cam": {}
+    }
+    sensor_data = BACKEND.dataset.get_sensor_data(query)
+    if "cam" in sensor_data and "data" in sensor_data["cam"] and sensor_data["cam"]["data"] is not None:
+        image_str = sensor_data["cam"]["data"]
         response["image_b64"] = base64.b64encode(image_str).decode("utf-8")
-        response["image_b64"] = 'data:image/{};base64,'.format(sensor_data["cam2"]["datatype"]) + response["image_b64"]
+        response["image_b64"] = 'data:image/{};base64,'.format(sensor_data["cam"]["datatype"]) + response["image_b64"]
         print("send an image with size {}!".format(len(response["image_b64"])))
     else:
         response["image_b64"] = ""

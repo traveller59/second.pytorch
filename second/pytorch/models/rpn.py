@@ -216,7 +216,7 @@ class RPNBase(nn.Module):
         for i in range(len(upsample_strides)):
             # print(upsample_strides[i])
             must_equal_list.append(upsample_strides[i] / np.prod(
-                layer_strides[:i + self._upsample_start_idx]))
+                layer_strides[:i + self._upsample_start_idx + 1]))
         for val in must_equal_list:
             assert val == must_equal_list[0]
 

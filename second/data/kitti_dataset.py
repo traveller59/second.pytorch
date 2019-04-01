@@ -166,23 +166,24 @@ class KittiDataset(Dataset):
         return example
 
     def get_sensor_data(self, query):
-        assert isinstance(query, int)
-        info = self._kitti_infos[query]
+        read_image = False
+        idx = query
+        if isinstance(query, dict):
+            read_image = "cam" in query
+            assert "lidar" in query
+            idx = query["lidar"]["idx"]
+        info = self._kitti_infos[idx]
         res = {
             "lidar": {
                 "type": "lidar",
                 "points": None,
             },
-            "cam2": {
-                "type": "camera",
-                "data": None,
-                "datatype": "png",
-            },
             "metadata": {
                 "image_idx": info["image"]["image_idx"],
                 "image_shape": info["image"]["image_shape"],
             },
-            "calib": None
+            "calib": None,
+            "cam": {}
         }
 
         pc_info = info["point_cloud"]
@@ -199,10 +200,15 @@ class KittiDataset(Dataset):
         res["lidar"]["points"] = points
         image_info = info["image"]
         image_path = image_info['image_path']
-        # image_path = self._root_path / image_path
-        # with open(str(image_path), 'rb') as f:
-        #     image_str = f.read()
-        # res["cam2"]["data"] = image_str
+        if read_image:
+            image_path = self._root_path / image_path
+            with open(str(image_path), 'rb') as f:
+                image_str = f.read()
+            res["cam"] = {
+                "type": "camera",
+                "data": image_str,
+                "datatype": "png",
+            }
         calib = info["calib"]
         calib_dict = {
             'rect': calib['R0_rect'],
@@ -233,7 +239,7 @@ class KittiDataset(Dataset):
                 'boxes': gt_boxes,
                 'names': gt_names,
             }
-            res["cam2"]["annotations"] = {
+            res["cam"]["annotations"] = {
                 'boxes': annos["bbox"],
                 'names': gt_names,
             }

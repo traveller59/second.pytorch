@@ -60,7 +60,7 @@ class NuScenesDataset(Dataset):
             if v.lower() in ["car", "pedestrian"
                              ]:  # we only eval these classes in kitti
                 self._kitti_name_mapping[k] = v
-        self.version = "v1.0-trainval"
+        self.version = "v1.0-mini"
         self.eval_version = "cvpr_2019"
 
     def __len__(self):
@@ -116,8 +116,14 @@ class NuScenesDataset(Dataset):
         return example
 
     def get_sensor_data(self, query):
-        assert isinstance(query, int)
-        info = self._nusc_infos[query]
+        idx = query
+        read_test_image = False
+        if isinstance(query, dict):
+            assert "lidar" in query
+            idx = query["lidar"]["idx"] # currently only for visualization
+            read_test_image = "cam" in query
+
+        info = self._nusc_infos[idx]
         res = {
             "lidar": {
                 "type": "lidar",
@@ -133,6 +139,18 @@ class NuScenesDataset(Dataset):
             str(lidar_path), dtype=np.float32, count=-1).reshape([-1,
                                                                   5])[:, :4]
         points[:, -1] /= 255
+        if read_test_image:
+            if Path(info["cam_front_path"]).exists():
+                with open(str(info["cam_front_path"]), 'rb') as f:
+                    image_str = f.read()
+            else:
+                image_str = None
+            res["cam"] = {
+                "type": "camera",
+                "data": image_str,
+                "datatype": "jpg",
+            }
+
         # mask = box_np_ops.points_in_rbbox(points, info["gt_boxes"]).any(-1)
         # points = points[~mask]
         res["lidar"]["points"] = points
@@ -272,7 +290,7 @@ class NuScenesDataset(Dataset):
         res_path = str(Path(output_dir) / "results_nusc.json")
         with open(res_path, "w") as f:
             json.dump(nusc_annos, f)
-
+        del nusc # release memory
         from nuscenes.eval.detection.evaluate import main as eval_main
         eval_main(
             res_path,
@@ -403,10 +421,13 @@ def _fill_trainval_infos(nusc, train_scenes, val_scenes, test=False):
     val_nusc_infos = []
     for sample in prog_bar(nusc.sample):
         lidar_token = sample["data"]["LIDAR_TOP"]
-        lidar_path, boxes, cam_intrinsic = nusc.get_sample_data(lidar_token)
+        cam_front_token = sample["data"]["CAM_FRONT"]
+        lidar_path, boxes, _ = nusc.get_sample_data(lidar_token)
+        cam_path, _, cam_intrinsic = nusc.get_sample_data(cam_front_token)
         if Path(lidar_path).exists():
             info = {
                 "lidar_path": lidar_path,
+                "cam_front_path": cam_path,
                 "token": sample["token"],
             }
             if not test:
