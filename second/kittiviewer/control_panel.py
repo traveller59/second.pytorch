@@ -69,8 +69,6 @@ def _string_to_jsonable(string):
     return json.loads(string)
 
 class QListEdit(QLineEdit):
-    """ line edit for A, B, C data
-    """
     def __init__(self,
                  dtype,
                  value=[],
@@ -85,8 +83,6 @@ class QListEdit(QLineEdit):
         self.setText(_list_to_string(value))
 
 class QArrayEdit(QLineEdit):
-    """ line edit for [[1, 2, 3]] data
-    """
     def __init__(self,
                  dtype,
                  value=np.array([]),
@@ -109,8 +105,6 @@ class QArrayEdit(QLineEdit):
         self.setText(_ndarray_to_string(value))
 
 class QJsonEdit(QLineEdit):
-    """ line edit for any json string data
-    """
     def __init__(self,
                  value=[],
                  parent=None):

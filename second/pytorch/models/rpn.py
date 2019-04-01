@@ -1,15 +1,13 @@
 import time
-from enum import Enum
 
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-import spconv
-import torchplus
+from torchvision.models import resnet
+
 from torchplus.nn import Empty, GroupNorm, Sequential
 from torchplus.tools import change_default_args
-from torchvision.models import resnet
 
 
 class RPN(nn.Module):
@@ -27,15 +25,11 @@ class RPN(nn.Module):
                  use_direction_classifier=True,
                  use_groupnorm=False,
                  num_groups=32,
-                 use_bev=False,
                  box_code_size=7,
-                 use_rc_net=False,
                  name='rpn'):
         super(RPN, self).__init__()
         self._num_anchor_per_loc = num_anchor_per_loc
         self._use_direction_classifier = use_direction_classifier
-        self._use_bev = use_bev
-        self._use_rc_net = use_rc_net
         assert len(layer_nums) == 3
         assert len(layer_strides) == len(layer_nums)
         assert len(num_filters) == len(layer_nums)
@@ -67,19 +61,6 @@ class RPN(nn.Module):
         # note that when stride > 1, conv2d with same padding isn't
         # equal to pad-conv2d. we should use pad-conv2d.
         block2_input_filters = num_filters[0]
-        if use_bev:
-            self.bev_extractor = Sequential(
-                Conv2d(6, 32, 3, padding=1),
-                BatchNorm2d(32),
-                nn.ReLU(),
-                # nn.MaxPool2d(2, 2),
-                Conv2d(32, 64, 3, padding=1),
-                BatchNorm2d(64),
-                nn.ReLU(),
-                nn.MaxPool2d(2, 2),
-            )
-            block2_input_filters += 64
-
         self.block1 = Sequential(
             nn.ZeroPad2d(1),
             Conv2d(
@@ -162,16 +143,12 @@ class RPN(nn.Module):
                 sum(num_upsample_filters), num_anchor_per_loc * box_code_size,
                 1)
 
-    def forward(self, x, bev=None):
+    def forward(self, x):
         # t = time.time()
         # torch.cuda.synchronize()
 
         x = self.block1(x)
         up1 = self.deconv1(x)
-        if self._use_bev:
-            bev[:, -1] = torch.clamp(
-                torch.log(1 + bev[:, -1]) / np.log(16.0), max=1.0)
-            x = torch.cat([x, self.bev_extractor(bev)], dim=1)
         x = self.block2(x)
         up2 = self.deconv2(x)
         x = self.block3(x)
@@ -200,16 +177,8 @@ class RPN(nn.Module):
 
         return ret_dict
 
-class RPNBase(nn.Module):
-    """Base RPN class. you need to subclass this class and implement
-    _make_layer function to generate block for RPN.
 
-    Notes:
-    1. upsample_strides and num_upsample_filters
-        if len(upsample_strides) == 2 and len(layer_nums) == 3 (3 downsample stage),
-        then upsample process start with stage 2.
-        if len(upsample_strides) == 0, no upsample.
-    """
+class RPNBase(nn.Module):
     def __init__(self,
                  use_norm=True,
                  num_class=2,
@@ -224,15 +193,11 @@ class RPNBase(nn.Module):
                  use_direction_classifier=True,
                  use_groupnorm=False,
                  num_groups=32,
-                 use_bev=False,
                  box_code_size=7,
-                 use_rc_net=False,
                  name='rpn'):
         super(RPNBase, self).__init__()
         self._num_anchor_per_loc = num_anchor_per_loc
         self._use_direction_classifier = use_direction_classifier
-        self._use_bev = use_bev
-        self._use_rc_net = use_rc_net
 
         self._layer_strides = layer_strides
         self._num_filters = num_filters
@@ -249,8 +214,9 @@ class RPNBase(nn.Module):
         self._upsample_start_idx = len(layer_nums) - len(upsample_strides)
         must_equal_list = []
         for i in range(len(upsample_strides)):
-            must_equal_list.append(upsample_strides[i] /
-                                   layer_strides[i + self._upsample_start_idx])
+            # print(upsample_strides[i])
+            must_equal_list.append(upsample_strides[i] / np.prod(
+                layer_strides[:i + self._upsample_start_idx]))
         for val in must_equal_list:
             assert val == must_equal_list[0]
 
@@ -321,7 +287,7 @@ class RPNBase(nn.Module):
     def _make_layer(self, inplanes, planes, num_blocks, stride=1):
         raise NotImplementedError
 
-    def forward(self, x, bev=None):
+    def forward(self, x):
         ups = []
         for i in range(len(self.blocks)):
             x = self.blocks[i](x)
@@ -344,9 +310,11 @@ class RPNBase(nn.Module):
             ret_dict["dir_cls_preds"] = dir_cls_preds
         return ret_dict
 
+
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    return nn.Conv2d(
+        in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
 class ResNetRPN(RPNBase):
@@ -367,17 +335,15 @@ class ResNetRPN(RPNBase):
                 nn.init.constant_(m.bn3.weight, 0)
             elif isinstance(m, resnet.BasicBlock):
                 nn.init.constant_(m.bn2.weight, 0)
-        
 
     def _make_layer(self, inplanes, planes, num_blocks, stride=1):
         if self.inplanes == -1:
             self.inplanes = self._num_input_features
-        block = resnet.BasicBlock # Bottleneck is bad for this project, need tune?
+        block = resnet.BasicBlock
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                conv1x1(self.inplanes, planes * block.expansion,
-                               stride),
+                conv1x1(self.inplanes, planes * block.expansion, stride),
                 nn.BatchNorm2d(planes * block.expansion),
             )
 

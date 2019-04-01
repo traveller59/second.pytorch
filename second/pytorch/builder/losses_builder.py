@@ -16,6 +16,7 @@
 """A function to build localization and classification losses from config."""
 
 from second.pytorch.core import losses
+from second.pytorch.core.ghm_loss import GHMCLoss, GHMRLoss
 from second.protos import losses_pb2
 
 
@@ -114,6 +115,13 @@ def _build_localization_loss(loss_config):
     else:
       code_weight = config.code_weight
     return losses.WeightedSmoothL1LocalizationLoss(config.sigma, code_weight)
+  if loss_type == 'weighted_ghm':
+    config = loss_config.weighted_ghm
+    if len(config.code_weight) == 0:
+      code_weight = None
+    else:
+      code_weight = config.code_weight
+    return GHMRLoss(config.mu, config.bins, config.momentum, code_weight)
 
   raise ValueError('Empty loss config.')
 
@@ -162,6 +170,11 @@ def _build_classification_loss(loss_config):
     return losses.SoftmaxFocalClassificationLoss(
         gamma=config.gamma,
         alpha=alpha)
+  if loss_type == 'weighted_ghm':
+    config = loss_config.weighted_ghm
+    return GHMCLoss(
+        bins=config.bins,
+        momentum=config.momentum)
 
   if loss_type == 'weighted_softmax':
     config = loss_config.weighted_softmax

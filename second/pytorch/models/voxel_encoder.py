@@ -1,10 +1,10 @@
 import time
+
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-import spconv
-import torchplus
+
 from torchplus.nn import Empty, GroupNorm, Sequential
 from torchplus.tools import change_default_args
 
@@ -65,12 +65,15 @@ class VFELayer(nn.Module):
         # [K, T, 2 * units]
         return concatenated
 
+
 class VoxelFeatureExtractor(nn.Module):
     def __init__(self,
                  num_input_features=4,
                  use_norm=True,
                  num_filters=[32, 128],
                  with_distance=False,
+                 voxel_size=(0.2, 0.2, 4),
+                 pc_range=(0, -40, -3, 70.4, 40, 1),
                  name='VoxelFeatureExtractor'):
         super(VoxelFeatureExtractor, self).__init__()
         self.name = name
@@ -93,7 +96,7 @@ class VoxelFeatureExtractor(nn.Module):
         # var_torch_init(self.linear.bias)
         self.norm = BatchNorm1d(num_filters[1])
 
-    def forward(self, features, num_voxels):
+    def forward(self, features, num_voxels, coors):
         # features: [concated_num_points, num_voxel_size, 3(4)]
         # num_voxels: [concated_num_points]
         # t = time.time()
@@ -104,15 +107,15 @@ class VoxelFeatureExtractor(nn.Module):
         features_relative = features[:, :, :3] - points_mean
         if self._with_distance:
             points_dist = torch.norm(features[:, :, :3], 2, 2, keepdim=True)
-            features = torch.cat(
-                [features, features_relative, points_dist], dim=-1)
+            features = torch.cat([features, features_relative, points_dist],
+                                 dim=-1)
         else:
             features = torch.cat([features, features_relative], dim=-1)
         voxel_count = features.shape[1]
         mask = get_paddings_indicator(num_voxels, voxel_count, axis=0)
         mask = torch.unsqueeze(mask, -1).type_as(features)
         # mask = features.max(dim=2, keepdim=True)[0] != 0
-        
+
         # torch.cuda.synchronize()
         # print("vfe prep forward time", time.time() - t)
         x = self.vfe1(features)
@@ -135,6 +138,8 @@ class VoxelFeatureExtractorV2(nn.Module):
                  use_norm=True,
                  num_filters=[32, 128],
                  with_distance=False,
+                 voxel_size=(0.2, 0.2, 4),
+                 pc_range=(0, -40, -3, 70.4, 40, 1),
                  name='VoxelFeatureExtractor'):
         super(VoxelFeatureExtractorV2, self).__init__()
         self.name = name
@@ -161,7 +166,7 @@ class VoxelFeatureExtractorV2(nn.Module):
         # var_torch_init(self.linear.bias)
         self.norm = BatchNorm1d(num_filters[-1])
 
-    def forward(self, features, num_voxels):
+    def forward(self, features, num_voxels, coors):
         # features: [concated_num_points, num_voxel_size, 3(4)]
         # num_voxels: [concated_num_points]
         points_mean = features[:, :, :3].sum(
@@ -169,8 +174,8 @@ class VoxelFeatureExtractorV2(nn.Module):
         features_relative = features[:, :, :3] - points_mean
         if self._with_distance:
             points_dist = torch.norm(features[:, :, :3], 2, 2, keepdim=True)
-            features = torch.cat(
-                [features, features_relative, points_dist], dim=-1)
+            features = torch.cat([features, features_relative, points_dist],
+                                 dim=-1)
         else:
             features = torch.cat([features, features_relative], dim=-1)
         voxel_count = features.shape[1]
@@ -188,42 +193,53 @@ class VoxelFeatureExtractorV2(nn.Module):
         voxelwise = torch.max(features, dim=1)[0]
         return voxelwise
 
+
 class VoxelFeatureExtractorV3(nn.Module):
     def __init__(self,
                  num_input_features=4,
                  use_norm=True,
                  num_filters=[32, 128],
                  with_distance=False,
+                 voxel_size=(0.2, 0.2, 4),
+                 pc_range=(0, -40, -3, 70.4, 40, 1),
                  name='VoxelFeatureExtractor'):
         super(VoxelFeatureExtractorV3, self).__init__()
         self.name = name
+        self.num_input_features = num_input_features
 
-    def forward(self, features, num_voxels):
+    def forward(self, features, num_voxels, coors):
         # features: [concated_num_points, num_voxel_size, 3(4)]
         # num_voxels: [concated_num_points]
-        points_mean = features[:, :, :4].sum(
+        points_mean = features[:, :, :self.num_input_features].sum(
             dim=1, keepdim=False) / num_voxels.type_as(features).view(-1, 1)
         return points_mean.contiguous()
+
 
 class SimpleVoxel(nn.Module):
     """Simple voxel encoder. only keep r, z and reflection feature.
     """
+
     def __init__(self,
                  num_input_features=4,
                  use_norm=True,
-                 num_filters=[32, 128],
+                 num_filters=(32, 128),
                  with_distance=False,
+                 voxel_size=(0.2, 0.2, 4),
+                 pc_range=(0, -40, -3, 70.4, 40, 1),
                  name='SimpleVoxel'):
-        
+
         super(SimpleVoxel, self).__init__()
+
+        self.num_input_features = num_input_features
         self.name = name
 
-    def forward(self, features, num_voxels):
+    def forward(self, features, num_voxels, coors):
         # features: [concated_num_points, num_voxel_size, 3(4)]
         # num_voxels: [concated_num_points]
-        points_mean = features[:, :, :4].sum(
+        points_mean = features[:, :, :self.num_input_features].sum(
             dim=1, keepdim=False) / num_voxels.type_as(features).view(-1, 1)
         feature = torch.norm(points_mean[:, :2], p=2, dim=1, keepdim=True)
         # z is important for z position regression, but x, y is not.
-        return torch.cat([feature, points_mean[:, 2:4]], dim=1)
-
+        res = torch.cat([feature, points_mean[:, 2:self.num_input_features]],
+                        dim=1)
+        return res

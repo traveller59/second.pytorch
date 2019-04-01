@@ -8,13 +8,19 @@ import numba
 import numpy as np
 
 from second.core import box_np_ops
-from second.core.geometry import (points_in_convex_polygon_3d_jit,
-                                    points_in_convex_polygon_jit)
+from second.core.geometry import (is_line_segment_intersection_jit,
+                                  points_in_convex_polygon_3d_jit,
+                                  points_in_convex_polygon_jit)
 import copy
 
 
 class BatchSampler:
-    def __init__(self, sampled_list, name=None, epoch=None, shuffle=True, drop_reminder=False):
+    def __init__(self,
+                 sampled_list,
+                 name=None,
+                 epoch=None,
+                 shuffle=True,
+                 drop_reminder=False):
         self._sampled_list = sampled_list
         self._indices = np.arange(len(sampled_list))
         if shuffle:
@@ -99,6 +105,7 @@ class DataBasePreprocessor:
         return db_infos
 
 
+
 def random_crop_frustum(bboxes,
                         rect,
                         Trv2c,
@@ -106,9 +113,9 @@ def random_crop_frustum(bboxes,
                         max_crop_height=1.0,
                         max_crop_width=0.9):
     num_gt = bboxes.shape[0]
-    crop_minxy = np.random.uniform(
-        [1 - max_crop_width, 1 - max_crop_height], [0.3, 0.3],
-        size=[num_gt, 2])
+    crop_minxy = np.random.uniform([1 - max_crop_width, 1 - max_crop_height],
+                                   [0.3, 0.3],
+                                   size=[num_gt, 2])
     crop_maxxy = np.ones([num_gt, 2], dtype=bboxes.dtype)
     crop_bboxes = np.concatenate([crop_minxy, crop_maxxy], axis=1)
     left = np.random.choice([False, True], replace=False, p=[0.5, 0.5])
@@ -170,18 +177,6 @@ def filter_gt_low_points(gt_boxes,
             points_mask &= np.logical_not(masks)
             gt_boxes_mask[i] = False
     return gt_boxes[gt_boxes_mask], points[points_mask]
-
-
-def remove_points_in_boxes(points, boxes):
-    masks = box_np_ops.points_in_rbbox(points, boxes)
-    points = points[np.logical_not(masks.any(-1))]
-    return points
-
-
-def remove_points_outside_boxes(points, boxes):
-    masks = box_np_ops.points_in_rbbox(points, boxes)
-    points = points[masks.any(-1)]
-    return points
 
 
 def mask_points_in_corners(points, box_corners):
@@ -357,8 +352,8 @@ def noise_per_box_group_v2_(boxes, valid_mask, loc_noises, rot_noises,
                                              current_box[0, 1]**2)
                     current_grot[i] = np.arctan2(current_box[0, 0],
                                                  current_box[0, 1])
-                    dst_grot[
-                        i] = current_grot[i] + global_rot_noises[idx + i, j]
+                    dst_grot[i] = current_grot[i] + global_rot_noises[idx +
+                                                                      i, j]
                     dst_pos[i, 0] = current_radius * np.sin(dst_grot[i])
                     dst_pos[i, 1] = current_radius * np.cos(dst_grot[i])
                     current_box[0, :2] = dst_pos[i]
@@ -370,10 +365,8 @@ def noise_per_box_group_v2_(boxes, valid_mask, loc_noises, rot_noises,
                     rot_mat_T[0, 1] = -rot_sin
                     rot_mat_T[1, 0] = rot_sin
                     rot_mat_T[1, 1] = rot_cos
-                    current_corners[
-                        i] = current_box[0, 2:
-                                         4] * corners_norm @ rot_mat_T + current_box[0, :
-                                                                                     2]
+                    current_corners[i] = current_box[
+                        0, 2:4] * corners_norm @ rot_mat_T + current_box[0, :2]
                     current_corners[i] -= current_box[0, :2]
 
                     _rotation_box2d_jit_(current_corners[i],
@@ -436,9 +429,8 @@ def noise_per_box_v2_(boxes, valid_mask, loc_noises, rot_noises,
                 rot_mat_T[0, 1] = -rot_sin
                 rot_mat_T[1, 0] = rot_sin
                 rot_mat_T[1, 1] = rot_cos
-                current_corners[:] = current_box[0, 2:
-                                                 4] * corners_norm @ rot_mat_T + current_box[0, :
-                                                                                             2]
+                current_corners[:] = current_box[
+                    0, 2:4] * corners_norm @ rot_mat_T + current_box[0, :2]
                 current_corners -= current_box[0, :2]
                 _rotation_box2d_jit_(current_corners, rot_noises[i, j],
                                      rot_mat_T)
@@ -484,8 +476,8 @@ def box3d_transform_(boxes, loc_transform, rot_transform, valid_mask):
 
 
 def _select_transform(transform, indices):
-    result = np.zeros(
-        (transform.shape[0], *transform.shape[2:]), dtype=transform.dtype)
+    result = np.zeros((transform.shape[0], *transform.shape[2:]),
+                      dtype=transform.dtype)
     for i in range(transform.shape[0]):
         if indices[i] != -1:
             result[i] = transform[i, indices[i]]
@@ -582,10 +574,9 @@ def get_group_center(locs, group_ids):
                 group_id_num_dict[gid] = 1
                 group_centers[group_id_dict[gid]] = locs[i]
     for i, gid in enumerate(group_ids):
-        group_centers_ret[
-            i] = group_centers[group_id_dict[gid]] / group_id_num_dict[gid]
+        group_centers_ret[i] = group_centers[
+            group_id_dict[gid]] / group_id_num_dict[gid]
     return group_centers_ret, group_id_num_dict
-
 
 
 def noise_per_object_v3_(gt_boxes,
@@ -594,7 +585,7 @@ def noise_per_object_v3_(gt_boxes,
                          rotation_perturb=np.pi / 4,
                          center_noise_std=1.0,
                          global_random_rot_range=np.pi / 4,
-                         num_try=100,
+                         num_try=5,
                          group_ids=None):
     """random rotate or remove each groundtrutn independently.
     use kitti viewer to test this function points_transform_
@@ -649,11 +640,12 @@ def noise_per_object_v3_(gt_boxes,
                              gt_boxes[:, 6], group_centers, valid_mask)
         group_nums = np.array(list(group_id_num_dict.values()), dtype=np.int64)
 
+    origin = [0.5, 0.5, 0.5]
     gt_box_corners = box_np_ops.center_to_corner_box3d(
         gt_boxes[:, :3],
         gt_boxes[:, 3:6],
         gt_boxes[:, 6],
-        origin=0.5,
+        origin=origin,
         axis=2)
     if group_ids is not None:
         if not enable_grot:
@@ -726,11 +718,12 @@ def noise_per_object_v2_(gt_boxes,
         grot_uppers[..., np.newaxis],
         size=[num_boxes, num_try])
 
+    origin = [0.5, 0.5, 0]
     gt_box_corners = box_np_ops.center_to_corner_box3d(
         gt_boxes[:, :3],
         gt_boxes[:, 3:6],
         gt_boxes[:, 6],
-        origin=0.5,
+        origin=origin,
         axis=2)
     if np.abs(global_random_rot_range[0] - global_random_rot_range[1]) < 1e-3:
         selected_noise = noise_per_box(gt_boxes[:, [0, 1, 3, 4, 6]],
@@ -772,8 +765,9 @@ def global_rotation(gt_boxes, points, rotation=np.pi / 4):
 
 
 def random_flip(gt_boxes, points, probability=0.5):
-    enable = np.random.choice(
-        [False, True], replace=False, p=[1 - probability, probability])
+    enable = np.random.choice([False, True],
+                              replace=False,
+                              p=[1 - probability, probability])
     if enable:
         gt_boxes[:, 1] = -gt_boxes[:, 1]
         gt_boxes[:, 6] = -gt_boxes[:, 6] + np.pi
@@ -806,8 +800,8 @@ def box_collision_test(boxes, qboxes, clockwise=True):
     K = qboxes.shape[0]
     ret = np.zeros((N, K), dtype=np.bool_)
     slices = np.array([1, 2, 3, 0])
-    lines_boxes = np.stack(
-        (boxes, boxes[:, slices, :]), axis=2)  # [N, 4, 2(line), 2(xy)]
+    lines_boxes = np.stack((boxes, boxes[:, slices, :]),
+                           axis=2)  # [N, 4, 2(line), 2(xy)]
     lines_qboxes = np.stack((qboxes, qboxes[:, slices, :]), axis=2)
     # vec = np.zeros((2,), dtype=boxes.dtype)
     boxes_standup = box_np_ops.corner_to_standup_nd_jit(boxes)
@@ -882,3 +876,26 @@ def box_collision_test(boxes, qboxes, clockwise=True):
                             ret[i, j] = True  # collision.
     return ret
 
+def global_translate_(gt_boxes, points, noise_translate_std):
+    """
+    Apply global translation to gt_boxes and points.
+    """
+
+    if not isinstance(noise_translate_std, (list, tuple, np.ndarray)):
+        noise_translate_std = np.array([noise_translate_std, noise_translate_std, noise_translate_std])
+    if all([e == 0 for e in noise_translate_std]):
+        return gt_boxes, points
+    noise_translate = np.array([np.random.normal(0, noise_translate_std[0], 1),
+                                np.random.normal(0, noise_translate_std[1], 1),
+                                np.random.normal(0, noise_translate_std[0], 1)]).T
+
+    points[:, :3] += noise_translate
+    gt_boxes[:, :3] += noise_translate
+
+
+if __name__ == "__main__":
+    bboxes = np.array([[0.0, 0.0, 0.5, 0.5], [0.2, 0.2, 0.6, 0.6],
+                       [0.7, 0.7, 0.9, 0.9], [0.55, 0.55, 0.8, 0.8]])
+    bbox_corners = box_np_ops.minmax_to_corner_2d(bboxes)
+    print(bbox_corners.shape)
+    print(box_collision_test(bbox_corners, bbox_corners))

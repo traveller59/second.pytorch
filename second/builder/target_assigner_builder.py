@@ -38,4 +38,3 @@ def build(target_assigner_config, bv_range, box_coder):
         positive_fraction=positive_fraction,
         sample_size=target_assigner_config.sample_size)
     return target_assigner
-

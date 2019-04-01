@@ -278,24 +278,6 @@ def get_kitti_image_info(path,
         image_infos = executor.map(map_func, image_ids)
     return list(image_infos)
 
-def convert_to_kitti_info_version2(info):
-    """convert kitti info v1 to v2 if possible.
-    """
-    if "image" not in info or "calib" not in info or "point_cloud" not in info:
-        info["image"] = {
-            'image_shape': info["img_shape"],
-            'image_idx': info['image_idx'],
-            'image_path': info['img_path'],
-        }
-        info["calib"] = {
-            "R0_rect": info['calib/R0_rect'],
-            "Tr_velo_to_cam": info['calib/Tr_velo_to_cam'],
-            "P2": info['calib/P2'],
-        }
-        info["point_cloud"] = {
-            "velodyne_path": info['velodyne_path'],
-        }
-
 
 def label_str_to_int(labels, remove_dontcare=True, dtype=np.int32):
     class_to_label = get_class_to_label_map()

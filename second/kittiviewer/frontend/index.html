@@ -289,6 +289,10 @@
         */
         cameraGui.open();
         var kittiGui = gui.addFolder("kitti controllers");
+        kittiGui.add(viewer, "datasetClassName").onChange(function (value) {
+            viewer.datasetClassName = value;
+            CookiesKitti.set('kittiviewer_dataset_cname', value);
+        });
         kittiGui.add(viewer, "backend").onChange(function (value) {
             viewer.backend = value;
             CookiesKitti.set('kittiviewer_backend', value);
@@ -318,23 +322,10 @@
         });
 
         kittiGui.add(viewer, "buildNet");
-        /*
-        kittiGui.add(viewer, "imageIndex").listen();
-        var fixbugParam = {
-          changeImageIndex: viewer.imageIndex
-        };
-        kittiGui.add(fixbugParam, "changeImageIndex").onChange(function(val) {
-          viewer.imageIndex = val;
-        });
-        kittiGui.add(viewer, "plot");
-        kittiGui.add(viewer, "next");
-        kittiGui.add(viewer, "prev");
-        */
         kittiGui.add(viewer, "inference");
         kittiGui.add(viewer, "enableInt16");
         kittiGui.add(viewer, "int16Factor", 1, 200);
-        kittiGui.add(viewer, "removeOutside");
-
+        // kittiGui.add(viewer, "removeOutside");
         viewer.screenshot = function(){
             viewer.saveAsImage(renderer);
         };

@@ -81,6 +81,58 @@ def is_line_segment_cross(lines1, lines2):
         _ccw(A, B, C) != _ccw(A, B, D))
 
 
+@numba.jit(nopython=False)
+def surface_equ_3d_jit(polygon_surfaces):
+    # return [a, b, c], d in ax+by+cz+d=0
+    # polygon_surfaces: [num_polygon, num_surfaces, num_points_of_polygon, 3]
+    surface_vec = polygon_surfaces[:, :, :2, :] - polygon_surfaces[:, :, 1:3, :]
+    # normal_vec: [..., 3]
+    normal_vec = np.cross(surface_vec[:, :, 0, :], surface_vec[:, :, 1, :])
+    # print(normal_vec.shape, points[..., 0, :].shape)
+    # d = -np.inner(normal_vec, points[..., 0, :])
+    d = np.einsum('aij, aij->ai', normal_vec, polygon_surfaces[:, :, 0, :])
+    return normal_vec, -d
+
+
+@numba.jit(nopython=False)
+def points_in_convex_polygon_3d_jit_v1(points,
+                                    polygon_surfaces,
+                                    num_surfaces=None):
+    """check points is in 3d convex polygons.
+    Args:
+        points: [num_points, 3] array.
+        polygon_surfaces: [num_polygon, max_num_surfaces, 
+            max_num_points_of_surface, 3] 
+            array. all surfaces' normal vector must direct to internal.
+            max_num_points_of_surface must at least 3.
+        num_surfaces: [num_polygon] array. indicate how many surfaces 
+            a polygon contain
+    Returns:
+        [num_points, num_polygon] bool array.
+    """
+    max_num_surfaces, max_num_points_of_surface = polygon_surfaces.shape[1:3]
+    num_points = points.shape[0]
+    num_polygons = polygon_surfaces.shape[0]
+    if num_surfaces is None:
+        num_surfaces = np.full((num_polygons,), 9999999, dtype=np.int64)
+    normal_vec, d = surface_equ_3d_jit(polygon_surfaces[:, :, :3, :])
+    # normal_vec: [num_polygon, max_num_surfaces, 3]
+    # d: [num_polygon, max_num_surfaces]
+    ret = np.ones((num_points, num_polygons), dtype=np.bool_)
+    sign = 0.0
+    for i in range(num_points):
+        for j in range(num_polygons):
+            for k in range(max_num_surfaces):
+                if k > num_surfaces[j]:
+                    break
+                sign = points[i, 0] * normal_vec[j, k, 0] \
+                     + points[i, 1] * normal_vec[j, k, 1] \
+                     + points[i, 2] * normal_vec[j, k, 2] + d[j, k]
+                if sign >= 0:
+                    ret[i, j] = False
+                    break
+    return ret
+
 def surface_equ_3d(polygon_surfaces):
     # return [a, b, c], d in ax+by+cz+d=0
     # polygon_surfaces: [num_polygon, num_surfaces, num_points_of_polygon, 3]
@@ -91,6 +143,7 @@ def surface_equ_3d(polygon_surfaces):
     # d = -np.inner(normal_vec, points[..., 0, :])
     d = np.einsum('aij, aij->ai', normal_vec, polygon_surfaces[:, :, 0, :])
     return normal_vec, -d
+
 
 
 def points_in_convex_polygon_3d_jit(points,
@@ -113,7 +166,7 @@ def points_in_convex_polygon_3d_jit(points,
     num_polygons = polygon_surfaces.shape[0]
     if num_surfaces is None:
         num_surfaces = np.full((num_polygons,), 9999999, dtype=np.int64)
-    normal_vec, d = surface_equ_3d(polygon_surfaces[:, :, :3, :])
+    normal_vec, d = surface_equ_3d_jitv2(polygon_surfaces[:, :, :3, :])
     # normal_vec: [num_polygon, max_num_surfaces, 3]
     # d: [num_polygon, max_num_surfaces]
     return _points_in_convex_polygon_3d_jit(points, polygon_surfaces, normal_vec, d, num_surfaces)
@@ -123,7 +176,19 @@ def points_in_convex_polygon_3d_jit(points,
 def _points_in_convex_polygon_3d_jit(points,
                                     polygon_surfaces,
                                     normal_vec, d,
-                                    num_surfaces):
+                                    num_surfaces=None):
+    """check points is in 3d convex polygons.
+    Args:
+        points: [num_points, 3] array.
+        polygon_surfaces: [num_polygon, max_num_surfaces, 
+            max_num_points_of_surface, 3] 
+            array. all surfaces' normal vector must direct to internal.
+            max_num_points_of_surface must at least 3.
+        num_surfaces: [num_polygon] array. indicate how many surfaces 
+            a polygon contain
+    Returns:
+        [num_points, num_polygon] bool array.
+    """
     max_num_surfaces, max_num_points_of_surface = polygon_surfaces.shape[1:3]
     num_points = points.shape[0]
     num_polygons = polygon_surfaces.shape[0]
@@ -201,3 +266,170 @@ def points_in_convex_polygon(points, polygon, clockwise=True):
     cross = np.cross(vec1, vec2)
     return np.all(cross > 0, axis=2)
 
+
+@numba.njit 
+def surface_equ_3d_jitv2(surfaces):
+    # polygon_surfaces: [num_polygon, num_surfaces, num_points_of_polygon, 3]
+    num_polygon = surfaces.shape[0]
+    max_num_surfaces = surfaces.shape[1]
+    normal_vec = np.zeros((num_polygon, max_num_surfaces, 3), dtype=surfaces.dtype)
+    d = np.zeros((num_polygon, max_num_surfaces), dtype=surfaces.dtype)
+    sv0 = surfaces[0, 0, 0] - surfaces[0, 0, 1]
+    sv1 = surfaces[0, 0, 0] - surfaces[0, 0, 1]
+    for i in range(num_polygon):
+        for j in range(max_num_surfaces):
+            sv0[0] = surfaces[i, j, 0, 0] - surfaces[i, j, 1, 0]
+            sv0[1] = surfaces[i, j, 0, 1] - surfaces[i, j, 1, 1]
+            sv0[2] = surfaces[i, j, 0, 2] - surfaces[i, j, 1, 2]
+            sv1[0] = surfaces[i, j, 1, 0] - surfaces[i, j, 2, 0]
+            sv1[1] = surfaces[i, j, 1, 1] - surfaces[i, j, 2, 1]
+            sv1[2] = surfaces[i, j, 1, 2] - surfaces[i, j, 2, 2]
+            normal_vec[i, j, 0] = (sv0[1] * sv1[2] - sv0[2] * sv1[1])
+            normal_vec[i, j, 1] = (sv0[2] * sv1[0] - sv0[0] * sv1[2])
+            normal_vec[i, j, 2] = (sv0[0] * sv1[1] - sv0[1] * sv1[0])
+            
+            d[i, j] = -surfaces[i, j, 0, 0] * normal_vec[i, j, 0] - \
+                      surfaces[i, j, 0, 1] * normal_vec[i, j, 1] - \
+                       surfaces[i, j, 0, 2] * normal_vec[i, j, 2]
+    return normal_vec, d
+
+@numba.njit
+def _points_in_convex_polygon_3d_jit_v2(points,
+                                    surfaces):
+    max_num_surfaces, max_num_points_of_surface = polygon_surfaces.shape[1:3]
+    num_points = points.shape[0]
+    num_polygons = polygon_surfaces.shape[0]
+    ret = np.ones((num_points, num_polygons), dtype=np.bool_)
+    sign = 0.0
+    for i in range(num_points):
+        for j in range(num_polygons):
+            for k in range(max_num_surfaces):
+                if k > num_surfaces[j]:
+                    break
+                sign = points[i, 0] * normal_vec[j, k, 0] \
+                     + points[i, 1] * normal_vec[j, k, 1] \
+                     + points[i, 2] * normal_vec[j, k, 2] + d[j, k]
+                if sign >= 0:
+                    ret[i, j] = False
+                    break
+    return ret
+
+
+@numba.njit 
+def points_in_convex_polygon_3d_jit_v2(points,
+                                    surfaces,
+                                    num_surfaces=None):
+    """check points is in 3d convex polygons.
+    Args:
+        points: [num_points, 3] array.
+        polygon_surfaces: [num_polygon, max_num_surfaces, 
+            max_num_points_of_surface, 3] 
+            array. all surfaces' normal vector must direct to internal.
+            max_num_points_of_surface must at least 3.
+        num_surfaces: [num_polygon] array. indicate how many surfaces 
+            a polygon contain
+    Returns:
+        [num_points, num_polygon] bool array.
+    """
+    num_polygon = surfaces.shape[0]
+    max_num_surfaces = surfaces.shape[1]
+    num_points = points.shape[0]
+    normal_vec = np.zeros((num_polygon, max_num_surfaces, 3), dtype=surfaces.dtype)
+    d = np.zeros((num_polygon, max_num_surfaces), dtype=surfaces.dtype)
+    sv0 = surfaces[0, 0, 0] - surfaces[0, 0, 1]
+    sv1 = surfaces[0, 0, 0] - surfaces[0, 0, 1]
+    ret = np.ones((num_points, num_polygon), dtype=np.bool_)
+    for i in range(num_polygon):
+        for j in range(max_num_surfaces):
+            sv0[0] = surfaces[i, j, 0, 0] - surfaces[i, j, 1, 0]
+            sv0[1] = surfaces[i, j, 0, 1] - surfaces[i, j, 1, 1]
+            sv0[2] = surfaces[i, j, 0, 2] - surfaces[i, j, 1, 2]
+            sv1[0] = surfaces[i, j, 1, 0] - surfaces[i, j, 2, 0]
+            sv1[1] = surfaces[i, j, 1, 1] - surfaces[i, j, 2, 1]
+            sv1[2] = surfaces[i, j, 1, 2] - surfaces[i, j, 2, 2]
+            normal_vec[i, j, 0] = (sv0[1] * sv1[2] - sv0[2] * sv1[1])
+            normal_vec[i, j, 1] = (sv0[2] * sv1[0] - sv0[0] * sv1[2])
+            normal_vec[i, j, 2] = (sv0[0] * sv1[1] - sv0[1] * sv1[0])
+            
+            d[i, j] = -surfaces[i, j, 0, 0] * normal_vec[i, j, 0] - \
+                      surfaces[i, j, 0, 1] * normal_vec[i, j, 1] - \
+                       surfaces[i, j, 0, 2] * normal_vec[i, j, 2]
+    
+    sign = 0.0
+    for i in range(num_points):
+        for j in range(num_polygon):
+            for k in range(max_num_surfaces):
+                sign = points[i, 0] * normal_vec[j, k, 0] \
+                     + points[i, 1] * normal_vec[j, k, 1] \
+                     + points[i, 2] * normal_vec[j, k, 2] + d[j, k]
+                if sign >= 0:
+                    ret[i, j] = False
+                    break
+    return ret
+
+from numba import cuda
+
+@cuda.jit(fastmath=True)
+def points_in_convex_polygon_3d_kernel(res, points, normal_vec, d):
+    bix = cuda.blockIdx.x
+    bdx = cuda.blockDim.x
+    tix = cuda.threadIdx.x
+    gdx = cuda.gridDim.x
+    num_points = points.shape[0]
+    num_polygon = normal_vec.shape[0]
+    num_surfaces = normal_vec.shape[1]
+    sign = 0.0
+    for i in range(bix * bdx + tix, num_points, bdx * gdx):
+        for j in range(num_polygon):
+            for k in range(num_surfaces):
+                sign = points[i, 0] * normal_vec[j, k, 0] \
+                     + points[i, 1] * normal_vec[j, k, 1] \
+                     + points[i, 2] * normal_vec[j, k, 2] + d[j, k]
+                res[i, j] &= sign < 0
+
+@numba.njit
+def div_up(m, n):
+    return m // n + (m % n > 0)
+
+def points_in_convex_polygon_3d_gpu(points, surfaces, device_id=0):
+    normal_vec, d = surface_equ_3d_jitv2(surfaces[:, :, :3, :])
+    num_polygon = surfaces.shape[0]
+    max_num_surfaces = surfaces.shape[1]
+    num_points = points.shape[0]
+    res = np.ones((num_points, num_polygon), dtype=np.bool_)
+    threadsPerBlock = 512
+    cuda.select_device(device_id)
+    blockspergrid = (div_up(num_points, threadsPerBlock),)
+
+    stream = cuda.stream()
+    with stream.auto_synchronize():
+        points_dev = cuda.to_device(points, stream)
+        normal_vec_dev = cuda.to_device(normal_vec, stream)
+        d_dev = cuda.to_device(d, stream)
+        res_dev = cuda.to_device(res, stream)
+        points_in_convex_polygon_3d_kernel[blockspergrid, threadsPerBlock, stream](
+            res_dev, points_dev, normal_vec_dev, d_dev)
+        res_dev.copy_to_host(res, stream=stream)
+    return res
+
+import time 
+if __name__ == "__main__":
+    surf = np.random.uniform(-1, 1, size=[15, 6, 4, 3])
+    points = np.random.uniform(-5, 5, size=[10000, 3])
+    ref, ref_d = surface_equ_3d(surf)
+    test, test_d = surface_equ_3d_jitv2(surf)
+    times = []
+    for i in range(10):
+        t = time.time()
+        test = points_in_convex_polygon_3d_gpu(points, surf)
+        times.append(time.time() - t)
+    print("test time", np.mean(times[2:]))
+
+    times = []
+    for i in range(10):
+        t = time.time()
+        ref = points_in_convex_polygon_3d_jit(points, surf)
+        times.append(time.time() - t)
+    print("ref time", np.mean(times[2:]))
+    print(np.linalg.norm(ref.astype(np.float32) - test.astype(np.float32)))
+    # print(np.linalg.norm(ref_d - test_d))

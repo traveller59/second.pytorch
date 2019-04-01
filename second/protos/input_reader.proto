@@ -1,34 +1,38 @@
 syntax = "proto3";
 
 package second.protos;
-
-import "second/protos/target.proto";
 import "second/protos/preprocess.proto";
 import "second/protos/sampler.proto";
+
 message InputReader {
-  uint32 batch_size = 3;
-  uint32 max_num_epochs = 4;
-  uint32 prefetch_size = 5;
-  uint32 max_number_of_voxels = 6;
-  TargetAssigner target_assigner = 7;
-  string kitti_info_path = 8;
-  string kitti_root_path = 9;
-  bool shuffle_points = 10;
-  repeated float groundtruth_localization_noise_std = 11;
-  repeated float groundtruth_rotation_uniform_noise = 12;
-  repeated float global_rotation_uniform_noise = 13;
-  repeated float global_scaling_uniform_noise = 14;
-  bool remove_unknown_examples = 15;
-  uint32 num_workers = 16;
-  float anchor_area_threshold = 17;
-  bool remove_points_after_sample = 18;
-  float groundtruth_points_drop_percentage = 19;
-  uint32 groundtruth_drop_max_keep_points = 20;
-  bool remove_environment = 21;
-  bool unlabeled_training = 22;
-  repeated float global_random_rotation_range_per_object = 23;
-  repeated DatabasePreprocessingStep database_prep_steps = 24;
-  Sampler database_sampler = 25;
-  bool use_group_id = 26; // this will enable group sample and noise
-  Sampler unlabeled_database_sampler = 27;
+  uint32 batch_size = 1;
+  message Dataset {
+    string kitti_info_path = 1;
+    string kitti_root_path = 2;
+    string dataset_class_name = 3; // support KittiDataset and NuScenesDataset
+  }
+  Dataset dataset = 2;
+  message Preprocess {
+    bool shuffle_points = 1;
+    uint32 max_number_of_voxels = 2;
+    repeated float groundtruth_localization_noise_std = 3;
+    repeated float groundtruth_rotation_uniform_noise = 4;
+    repeated float global_rotation_uniform_noise = 5;
+    repeated float global_scaling_uniform_noise = 6;
+    repeated float global_translate_noise_std = 7;
+    bool remove_unknown_examples = 8;
+    uint32 num_workers = 9;
+    float anchor_area_threshold = 10;
+    bool remove_points_after_sample = 11;
+    float groundtruth_points_drop_percentage = 12;
+    uint32 groundtruth_drop_max_keep_points = 13;
+    bool remove_environment = 14;
+    repeated float global_random_rotation_range_per_object = 15;
+    repeated DatabasePreprocessingStep database_prep_steps = 16;
+    Sampler database_sampler = 17;
+    bool use_group_id = 18; // this will enable group sample and noise
+  }
+  Preprocess preprocess = 3;
+  uint32 max_num_epochs = 4; // deprecated
+  uint32 prefetch_size = 5;  // deprecated
 }

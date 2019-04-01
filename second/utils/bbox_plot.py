@@ -7,6 +7,20 @@ import pyqtgraph.opengl as gl
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 from pyqtgraph.opengl.GLGraphicsItem import GLGraphicsItem
 from pyqtgraph.Qt import QtCore, QtGui
+import cv2
+
+def plot_hist(array, num_bins=2048):
+    array_abs = np.abs(array)
+    max_value = array_abs.max()
+    bins = np.arange(num_bins).astype(np.float32) / num_bins * max_value
+    hist, edge = np.histogram(array_abs, bins=bins)
+    hist_normed = hist.astype(np.float64) / hist.sum()
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.set_yscale("log", nonposy='clip')
+    ax.scatter(edge[2:], hist_normed[1:], s=1)
+    plt.show()
+
 
 class FORMAT(Enum):
     """enum that indicate format of a bbox
@@ -88,6 +102,66 @@ def draw_bbox_in_ax(ax,
                 size=label_size)
     return ax
 
+
+def cv2_draw_bbox_with_label(img,
+                             bboxes,
+                             colors,
+                             labels=None,
+                             label_colors=None,
+                             thickness=1,
+                             line_type=cv2.LINE_8,
+                             font_line_type=cv2.LINE_8):
+    # assume bboxes has right format.
+    bboxes = bboxes.astype(np.int32)
+    if label_colors is None:
+        label_colors = colors
+    if labels is None:
+        labels = [None] * bboxes.shape[0]
+
+    font = cv2.FONT_ITALIC
+    font = cv2.FONT_HERSHEY_DUPLEX
+    font = cv2.FONT_HERSHEY_PLAIN
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    for bbox, color, label, label_color in zip(bboxes, colors, labels,
+                                               label_colors):
+        color = tuple(int(c) for c in color)
+        label_color = tuple(int(c) for c in label_color)
+        cv2.rectangle(img, tuple(bbox[:2]), tuple(bbox[2:]), color, thickness,
+                      line_type)
+        if label is not None:
+            cv2.putText(img, label, tuple(bbox[:2]), font, 1, label_color,
+                        thickness, font_line_type, False)
+    return img
+
+
+def cv2_draw_3d_bbox(img, bboxes, colors, thickness=1, line_type=cv2.LINE_8):
+    # assume bboxes has right format(N, 8, 2).
+    bboxes = bboxes.astype(np.int32)
+    for box, color in zip(bboxes, colors):
+        color = tuple(int(c) for c in color)
+        box_a, box_b = box[:4], box[4:]
+        for pa, pb in zip(box_a, box_a[[1, 2, 3, 0]]):
+            cv2.line(img, (int(pa[0]), int(pa[1])), (int(pb[0]), int(pb[1])),
+                     color, thickness, line_type)
+        for pa, pb in zip(box_b, box_b[[1, 2, 3, 0]]):
+            cv2.line(img, (int(pa[0]), int(pa[1])), (int(pb[0]), int(pb[1])),
+                     color, thickness, line_type)
+        for pa, pb in zip(box_a, box_b):
+            cv2.line(img, (int(pa[0]), int(pa[1])), (int(pb[0]), int(pb[1])),
+                     color, thickness, line_type)
+    return img
+
+
+def get_cv2_color(glcolor, length):
+    cv_color = gl_color(glcolor, 0.5)
+    cv_colors = np.tile(np.array(cv_color)[np.newaxis, :3], [length, 1])
+    cv_colors = (cv_colors * 255).astype(np.int32)
+    return cv_colors
+
+
+def set_cv2_color_(glcolor, cv_colors, mask):
+    cv_color = gl_color(glcolor, 0.5)
+    cv_colors[mask] = (np.array(cv_color[:3]) * 255).astype(np.int32)
 
 
 def draw_3d_bbox_in_ax(ax, bboxes, colors='r', alpha=0.5, image_shape=None):

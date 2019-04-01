@@ -19,83 +19,10 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='second.protos',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x1esecond/protos/preprocess.proto\x12\rsecond.protos\"\xb1\x02\n\nPreprocess\x12&\n\x1erandom_global_rotation_min_rad\x18\x01 \x01(\x02\x12&\n\x1erandom_global_rotation_max_rad\x18\x02 \x01(\x02\x12!\n\x19random_global_scaling_min\x18\x03 \x01(\x02\x12!\n\x19random_global_scaling_max\x18\x04 \x01(\x02\x12,\n$random_noise_per_groundtruth_min_rad\x18\x05 \x01(\x02\x12,\n$random_noise_per_groundtruth_max_rad\x18\x06 \x01(\x02\x12\x31\n)random_noise_per_groundtruth_position_std\x18\x07 \x01(\x02\"\xd6\x01\n\x19\x44\x61tabasePreprocessingStep\x12\x43\n\x14\x66ilter_by_difficulty\x18\x01 \x01(\x0b\x32#.second.protos.DBFilterByDifficultyH\x00\x12U\n\x18\x66ilter_by_min_num_points\x18\x02 \x01(\x0b\x32\x31.second.protos.DBFilterByMinNumPointInGroundTruthH\x00\x42\x1d\n\x1b\x64\x61tabase_preprocessing_step\"4\n\x14\x44\x42\x46ilterByDifficulty\x12\x1c\n\x14removed_difficulties\x18\x01 \x03(\x05\"\xc3\x01\n\"DBFilterByMinNumPointInGroundTruth\x12\x64\n\x13min_num_point_pairs\x18\x01 \x03(\x0b\x32G.second.protos.DBFilterByMinNumPointInGroundTruth.MinNumPointPairsEntry\x1a\x37\n\x15MinNumPointPairsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\r:\x02\x38\x01\"\xb5\x01\n\x11PreprocessingStep\x12\x43\n\x15random_global_scaling\x18\x01 \x01(\x0b\x32\".second.protos.RandomGlobalScalingH\x00\x12\x45\n\x16random_global_rotation\x18\x02 \x01(\x0b\x32#.second.protos.RandomGlobalRotationH\x00\x42\x14\n\x12preprocessing_step\";\n\x13RandomGlobalScaling\x12\x11\n\tmin_scale\x18\x01 \x01(\x02\x12\x11\n\tmax_scale\x18\x02 \x01(\x02\"8\n\x14RandomGlobalRotation\x12\x0f\n\x07min_rad\x18\x01 \x01(\x02\x12\x0f\n\x07max_rad\x18\x02 \x01(\x02\x62\x06proto3')
+  serialized_pb=_b('\n\x1esecond/protos/preprocess.proto\x12\rsecond.protos\"\xd6\x01\n\x19\x44\x61tabasePreprocessingStep\x12\x43\n\x14\x66ilter_by_difficulty\x18\x01 \x01(\x0b\x32#.second.protos.DBFilterByDifficultyH\x00\x12U\n\x18\x66ilter_by_min_num_points\x18\x02 \x01(\x0b\x32\x31.second.protos.DBFilterByMinNumPointInGroundTruthH\x00\x42\x1d\n\x1b\x64\x61tabase_preprocessing_step\"4\n\x14\x44\x42\x46ilterByDifficulty\x12\x1c\n\x14removed_difficulties\x18\x01 \x03(\x05\"\xc3\x01\n\"DBFilterByMinNumPointInGroundTruth\x12\x64\n\x13min_num_point_pairs\x18\x01 \x03(\x0b\x32G.second.protos.DBFilterByMinNumPointInGroundTruth.MinNumPointPairsEntry\x1a\x37\n\x15MinNumPointPairsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\r:\x02\x38\x01\x62\x06proto3')
 )
 
 
-
-
-_PREPROCESS = _descriptor.Descriptor(
-  name='Preprocess',
-  full_name='second.protos.Preprocess',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='random_global_rotation_min_rad', full_name='second.protos.Preprocess.random_global_rotation_min_rad', index=0,
-      number=1, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='random_global_rotation_max_rad', full_name='second.protos.Preprocess.random_global_rotation_max_rad', index=1,
-      number=2, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='random_global_scaling_min', full_name='second.protos.Preprocess.random_global_scaling_min', index=2,
-      number=3, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='random_global_scaling_max', full_name='second.protos.Preprocess.random_global_scaling_max', index=3,
-      number=4, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='random_noise_per_groundtruth_min_rad', full_name='second.protos.Preprocess.random_noise_per_groundtruth_min_rad', index=4,
-      number=5, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='random_noise_per_groundtruth_max_rad', full_name='second.protos.Preprocess.random_noise_per_groundtruth_max_rad', index=5,
-      number=6, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='random_noise_per_groundtruth_position_std', full_name='second.protos.Preprocess.random_noise_per_groundtruth_position_std', index=6,
-      number=7, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  serialized_options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=50,
-  serialized_end=355,
-)
 
 
 _DATABASEPREPROCESSINGSTEP = _descriptor.Descriptor(
@@ -134,8 +61,8 @@ _DATABASEPREPROCESSINGSTEP = _descriptor.Descriptor(
       name='database_preprocessing_step', full_name='second.protos.DatabasePreprocessingStep.database_preprocessing_step',
       index=0, containing_type=None, fields=[]),
   ],
-  serialized_start=358,
-  serialized_end=572,
+  serialized_start=50,
+  serialized_end=264,
 )
 
 
@@ -165,8 +92,8 @@ _DBFILTERBYDIFFICULTY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=574,
-  serialized_end=626,
+  serialized_start=266,
+  serialized_end=318,
 )
 
 
@@ -203,8 +130,8 @@ _DBFILTERBYMINNUMPOINTINGROUNDTRUTH_MINNUMPOINTPAIRSENTRY = _descriptor.Descript
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=769,
-  serialized_end=824,
+  serialized_start=461,
+  serialized_end=516,
 )
 
 _DBFILTERBYMINNUMPOINTINGROUNDTRUTH = _descriptor.Descriptor(
@@ -233,125 +160,8 @@ _DBFILTERBYMINNUMPOINTINGROUNDTRUTH = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=629,
-  serialized_end=824,
-)
-
-
-_PREPROCESSINGSTEP = _descriptor.Descriptor(
-  name='PreprocessingStep',
-  full_name='second.protos.PreprocessingStep',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='random_global_scaling', full_name='second.protos.PreprocessingStep.random_global_scaling', index=0,
-      number=1, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='random_global_rotation', full_name='second.protos.PreprocessingStep.random_global_rotation', index=1,
-      number=2, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  serialized_options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-    _descriptor.OneofDescriptor(
-      name='preprocessing_step', full_name='second.protos.PreprocessingStep.preprocessing_step',
-      index=0, containing_type=None, fields=[]),
-  ],
-  serialized_start=827,
-  serialized_end=1008,
-)
-
-
-_RANDOMGLOBALSCALING = _descriptor.Descriptor(
-  name='RandomGlobalScaling',
-  full_name='second.protos.RandomGlobalScaling',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='min_scale', full_name='second.protos.RandomGlobalScaling.min_scale', index=0,
-      number=1, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='max_scale', full_name='second.protos.RandomGlobalScaling.max_scale', index=1,
-      number=2, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  serialized_options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=1010,
-  serialized_end=1069,
-)
-
-
-_RANDOMGLOBALROTATION = _descriptor.Descriptor(
-  name='RandomGlobalRotation',
-  full_name='second.protos.RandomGlobalRotation',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='min_rad', full_name='second.protos.RandomGlobalRotation.min_rad', index=0,
-      number=1, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='max_rad', full_name='second.protos.RandomGlobalRotation.max_rad', index=1,
-      number=2, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=float(0),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  serialized_options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=1071,
-  serialized_end=1127,
+  serialized_start=321,
+  serialized_end=516,
 )
 
 _DATABASEPREPROCESSINGSTEP.fields_by_name['filter_by_difficulty'].message_type = _DBFILTERBYDIFFICULTY
@@ -364,29 +174,10 @@ _DATABASEPREPROCESSINGSTEP.oneofs_by_name['database_preprocessing_step'].fields.
 _DATABASEPREPROCESSINGSTEP.fields_by_name['filter_by_min_num_points'].containing_oneof = _DATABASEPREPROCESSINGSTEP.oneofs_by_name['database_preprocessing_step']
 _DBFILTERBYMINNUMPOINTINGROUNDTRUTH_MINNUMPOINTPAIRSENTRY.containing_type = _DBFILTERBYMINNUMPOINTINGROUNDTRUTH
 _DBFILTERBYMINNUMPOINTINGROUNDTRUTH.fields_by_name['min_num_point_pairs'].message_type = _DBFILTERBYMINNUMPOINTINGROUNDTRUTH_MINNUMPOINTPAIRSENTRY
-_PREPROCESSINGSTEP.fields_by_name['random_global_scaling'].message_type = _RANDOMGLOBALSCALING
-_PREPROCESSINGSTEP.fields_by_name['random_global_rotation'].message_type = _RANDOMGLOBALROTATION
-_PREPROCESSINGSTEP.oneofs_by_name['preprocessing_step'].fields.append(
-  _PREPROCESSINGSTEP.fields_by_name['random_global_scaling'])
-_PREPROCESSINGSTEP.fields_by_name['random_global_scaling'].containing_oneof = _PREPROCESSINGSTEP.oneofs_by_name['preprocessing_step']
-_PREPROCESSINGSTEP.oneofs_by_name['preprocessing_step'].fields.append(
-  _PREPROCESSINGSTEP.fields_by_name['random_global_rotation'])
-_PREPROCESSINGSTEP.fields_by_name['random_global_rotation'].containing_oneof = _PREPROCESSINGSTEP.oneofs_by_name['preprocessing_step']
-DESCRIPTOR.message_types_by_name['Preprocess'] = _PREPROCESS
 DESCRIPTOR.message_types_by_name['DatabasePreprocessingStep'] = _DATABASEPREPROCESSINGSTEP
 DESCRIPTOR.message_types_by_name['DBFilterByDifficulty'] = _DBFILTERBYDIFFICULTY
 DESCRIPTOR.message_types_by_name['DBFilterByMinNumPointInGroundTruth'] = _DBFILTERBYMINNUMPOINTINGROUNDTRUTH
-DESCRIPTOR.message_types_by_name['PreprocessingStep'] = _PREPROCESSINGSTEP
-DESCRIPTOR.message_types_by_name['RandomGlobalScaling'] = _RANDOMGLOBALSCALING
-DESCRIPTOR.message_types_by_name['RandomGlobalRotation'] = _RANDOMGLOBALROTATION
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
-
-Preprocess = _reflection.GeneratedProtocolMessageType('Preprocess', (_message.Message,), dict(
-  DESCRIPTOR = _PREPROCESS,
-  __module__ = 'second.protos.preprocess_pb2'
-  # @@protoc_insertion_point(class_scope:second.protos.Preprocess)
-  ))
-_sym_db.RegisterMessage(Preprocess)
 
 DatabasePreprocessingStep = _reflection.GeneratedProtocolMessageType('DatabasePreprocessingStep', (_message.Message,), dict(
   DESCRIPTOR = _DATABASEPREPROCESSINGSTEP,
@@ -416,27 +207,6 @@ DBFilterByMinNumPointInGroundTruth = _reflection.GeneratedProtocolMessageType('D
   ))
 _sym_db.RegisterMessage(DBFilterByMinNumPointInGroundTruth)
 _sym_db.RegisterMessage(DBFilterByMinNumPointInGroundTruth.MinNumPointPairsEntry)
-
-PreprocessingStep = _reflection.GeneratedProtocolMessageType('PreprocessingStep', (_message.Message,), dict(
-  DESCRIPTOR = _PREPROCESSINGSTEP,
-  __module__ = 'second.protos.preprocess_pb2'
-  # @@protoc_insertion_point(class_scope:second.protos.PreprocessingStep)
-  ))
-_sym_db.RegisterMessage(PreprocessingStep)
-
-RandomGlobalScaling = _reflection.GeneratedProtocolMessageType('RandomGlobalScaling', (_message.Message,), dict(
-  DESCRIPTOR = _RANDOMGLOBALSCALING,
-  __module__ = 'second.protos.preprocess_pb2'
-  # @@protoc_insertion_point(class_scope:second.protos.RandomGlobalScaling)
-  ))
-_sym_db.RegisterMessage(RandomGlobalScaling)
-
-RandomGlobalRotation = _reflection.GeneratedProtocolMessageType('RandomGlobalRotation', (_message.Message,), dict(
-  DESCRIPTOR = _RANDOMGLOBALROTATION,
-  __module__ = 'second.protos.preprocess_pb2'
-  # @@protoc_insertion_point(class_scope:second.protos.RandomGlobalRotation)
-  ))
-_sym_db.RegisterMessage(RandomGlobalRotation)
 
 
 _DBFILTERBYMINNUMPOINTINGROUNDTRUTH_MINNUMPOINTPAIRSENTRY._options = None

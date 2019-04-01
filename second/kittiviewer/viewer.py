@@ -37,7 +37,9 @@ from second.core.box_coders import GroundBox3dCoder
 from second.core.point_cloud.point_cloud_ops import points_to_voxel
 from second.core.region_similarity import (
     DistanceSimilarity, NearestIouSimilarity, RotateIouSimilarity)
-from second.core.sample_ops import DataBaseSamplerV2
+from second.core.sample_ops import (
+    sample_from_database_v2, sample_from_database_v3, sample_from_database_v4,
+    DataBaseSamplerV2)
 from second.core.target_assigner import TargetAssigner
 from second.data import kitti_common as kitti
 from second.kittiviewer.glwidget import KittiGLViewWidget
@@ -182,9 +184,11 @@ def _riou3d_shapely(rbboxes1, rbboxes2):
 
 
 def kitti_anno_to_corners(info, annos=None):
-    rect = info['calib/R0_rect']
-    P2 = info['calib/P2']
-    Tr_velo_to_cam = info['calib/Tr_velo_to_cam']
+    calib = info["calib"]
+    rect = calib['R0_rect']
+    P2 = calib['P2']
+    Tr_velo_to_cam = calib['Tr_velo_to_cam']
+
     if annos is None:
         annos = info['annos']
     dims = annos['dimensions']
@@ -200,7 +204,7 @@ def kitti_anno_to_corners(info, annos=None):
         boxes_lidar[:, :3],
         boxes_lidar[:, 3:6],
         boxes_lidar[:, 6],
-        origin=[0.5, 0.5, 0],
+        origin=[0.5, 0.5, 0.5],
         axis=2)
     return boxes_corners, scores, boxes_lidar
 
@@ -281,8 +285,8 @@ class KittiPointCloudView(KittiGLViewWidget):
         self._max_num_points = max_num_points
         bk_color = (0.8, 0.8, 0.8, 1.0)
         bk_color = list([int(v * 255) for v in bk_color])
-        # self.setBackgroundColor(*bk_color)
-        # self.w_gl_widget.setBackgroundColor('w')
+        self.setBackgroundColor(*bk_color)
+        # self.setBackgroundColor('w')
         self.mousePressed.connect(self.on_mousePressed)
         self.setCameraPosition(distance=20, azimuth=-180, elevation=30)
 
@@ -434,6 +438,124 @@ class KittiPointCloudView(KittiGLViewWidget):
             cared_anchors_mask]
         self.boxes3d("anchors", anchors_not_neg, colors=colors)
 
+    def draw_anchors_trunk(self,
+                           gt_boxes_lidar,
+                           points=None,
+                           image_idx=0,
+                           gt_names=None):
+        # print(gt_names)
+        voxel_size = np.array(self._voxel_size, dtype=np.float32)
+        # voxel_size = np.array([0.2, 0.2, 0.4], dtype=np.float32)
+        coors_range = np.array(self._coors_range, dtype=np.float32)
+        # coors_range = np.array([0, -40, -3, 70.4, 40, 1], dtype=np.float32)
+        grid_size = (coors_range[3:] - coors_range[:3]) / voxel_size
+        grid_size = np.round(grid_size).astype(np.int64)
+        # print(grid_size)
+        bv_range = coors_range[[0, 1, 3, 4]]
+        ag0 = AnchorGeneratorStride(
+            # sizes=[0.6, 0.8, 1.73, 0.6, 1.76, 1.73],
+            sizes=[2.0210402, 4.50223291, 0.75530619],
+            anchor_strides=[0.4, 0.4, 0.0],
+            anchor_offsets=[-39.8, -39.8, -1.465],
+            rotations=[0, 1.5707963267948966],
+            match_threshold=0.6,
+            unmatch_threshold=0.45,
+        )
+        ag1 = AnchorGeneratorStride(
+            # sizes=[0.6, 0.8, 1.73, 0.6, 1.76, 1.73],
+            sizes=[2.49181956, 4.36252121, 2.07457216],
+            anchor_strides=[0.4, 0.4, 0.0],
+            anchor_offsets=[-39.8, -39.8, -1.465],
+            rotations=[0, 1.5707963267948966],
+            match_threshold=0.6,
+            unmatch_threshold=0.45,
+        )
+        ag2 = AnchorGeneratorStride(
+            # sizes=[0.6, 0.8, 1.73, 0.6, 1.76, 1.73],
+            sizes=[2.59346555, 12.12584471, 2.70386401],
+            anchor_strides=[0.4, 0.4, 0.0],
+            anchor_offsets=[-39.8, -39.8, -1.55442884],
+            rotations=[0, 1.5707963267948966],
+            # rotations=[0],
+            match_threshold=0.6,
+            unmatch_threshold=0.45,
+        )
+        anchor_generators = [ag0, ag1, ag2]
+        box_coder = GroundBox3dCoder()
+        # similarity_calc = DistanceSimilarity(1.0)
+        similarity_calc = NearestIouSimilarity()
+        target_assigner = TargetAssigner(box_coder, anchor_generators,
+                                         similarity_calc)
+        # anchors = box_np_ops.create_anchors_v2(
+        #     bv_range, grid_size[:2] // 2, sizes=anchor_dims)
+        # matched_thresholds = [0.45, 0.45, 0.6]
+        # unmatched_thresholds = [0.3, 0.3, 0.45]
+
+        t = time.time()
+        feature_map_size = grid_size[:2] // 2
+        feature_map_size = [*feature_map_size, 1][::-1]
+        print(feature_map_size)
+        # """
+        ret = target_assigner.generate_anchors(feature_map_size)
+        anchors = ret["anchors"]
+        anchors = anchors.reshape([-1, 7])
+        anchors_bv = box_np_ops.rbbox2d_to_near_bbox(
+            anchors[:, [0, 1, 3, 4, 6]])
+        matched_thresholds = ret["matched_thresholds"]
+        unmatched_thresholds = ret["unmatched_thresholds"]
+        print(f"num_anchors_ {len(anchors)}")
+        anchor_threshold = 1
+        if points is not None:
+            voxels, coors, num_points = points_to_voxel(
+                points,
+                voxel_size,
+                # self._coors_range,
+                coors_range,
+                self._max_num_points,
+                reverse_index=True,
+                max_voxels=self._max_voxels)
+
+            # print(np.min(coors, 0), np.max(coors, 0))
+            dense_voxel_map = box_np_ops.sparse_sum_for_anchors_mask(
+                coors, tuple(grid_size[::-1][1:]))
+            dense_voxel_map = dense_voxel_map.cumsum(0)
+            dense_voxel_map = dense_voxel_map.cumsum(1)
+            anchors_mask = box_np_ops.fused_get_anchors_area(
+                dense_voxel_map, anchors_bv, voxel_size, coors_range,
+                grid_size) > anchor_threshold
+        class_names = [
+            'Car', "Pedestrian", "Cyclist", 'Van', 'Truck', "Tram", 'Misc',
+            'Person_sitting', "car", "tractor", "trailer"
+        ]
+        gt_classes = np.array(
+            [class_names.index(n) + 1 for n in gt_names], dtype=np.int32)
+        t = time.time()
+        target_dict = target_assigner.assign(
+            anchors,
+            gt_boxes_lidar,
+            anchors_mask,
+            gt_classes=gt_classes,
+            matched_thresholds=matched_thresholds,
+            unmatched_thresholds=unmatched_thresholds)
+        labels = target_dict["labels"]
+        reg_targets = target_dict["bbox_targets"]
+        reg_weights = target_dict["bbox_outside_weights"]
+        # print(labels[labels > 0])
+        # decoded_reg_targets = box_np_ops.second_box_decode(reg_targets, anchors)
+        # print(decoded_reg_targets.reshape(-1, 7)[labels > 0])
+        print("target time", (time.time() - t))
+        print(f"num_pos={np.sum(labels > 0)}")
+        colors = np.zeros([anchors.shape[0], 4])
+        ignored_color = bbox_plot.gl_color(GLColor.Gray, 0.5)
+        pos_color = bbox_plot.gl_color(GLColor.Cyan, 0.5)
+
+        colors[labels == -1] = ignored_color
+        colors[labels > 0] = pos_color
+        cared_anchors_mask = np.logical_and(labels != 0, anchors_mask)
+        colors = colors[cared_anchors_mask]
+        anchors_not_neg = box_np_ops.rbbox3d_to_corners(anchors)[
+            cared_anchors_mask]
+        self.boxes3d("anchors_trunk", anchors_not_neg, colors=colors)
 
     def draw_bounding_box(self):
         bbox = box_np_ops.minmax_to_corner_3d(np.array([self.w_config.get("CoorsRange")]))
@@ -509,7 +631,7 @@ class KittiViewer(QMainWindow):
         self.current_idx = 0
         self.dt_image_idxes = None
         self.current_image = None
-        self.init_ui()
+        
         self.kitti_info = None
         self.points = None
         self.gt_boxes = None
@@ -517,6 +639,7 @@ class KittiViewer(QMainWindow):
         self.difficulty = None
         self.group_ids = None
         self.inference_ctx = None
+        self.init_ui()
 
     def init_ui(self):
 
@@ -545,6 +668,8 @@ class KittiViewer(QMainWindow):
         self.w_config.configChanged.connect(self.on_configchanged)
         self.w_plot = QPushButton('plot')
         self.w_plot.clicked.connect(self.on_plotButtonPressed)
+        self.w_plot_all = QPushButton('plot all')
+        self.w_plot_all.clicked.connect(self.on_plotAllButtonPressed)
 
         self.w_show_panel = QPushButton('control panel')
         self.w_show_panel.clicked.connect(self.on_panel_clicked)
@@ -576,6 +701,7 @@ class KittiViewer(QMainWindow):
 
         h_layout = QHBoxLayout()
         h_layout.addWidget(self.w_plot)
+        h_layout.addWidget(self.w_plot_all)
         control_panel_layout.addLayout(h_layout)
         control_panel_layout.addWidget(self.w_show_panel)
 
@@ -584,27 +710,27 @@ class KittiViewer(QMainWindow):
         vckpt_path = self.json_setting.get("latest_vxnet_ckpt_path", "")
         self.w_vckpt_path = QLineEdit(vckpt_path)
         layout = QFormLayout()
-        layout.addRow(QLabel("config path:"), self.w_vconfig_path)
-        layout.addRow(QLabel("ckpt path:"), self.w_vckpt_path)
+        layout.addRow(QLabel("VoxelNet config path:"), self.w_vconfig_path)
+        layout.addRow(QLabel("VoxelNet ckpt path:"), self.w_vckpt_path)
         control_panel_layout.addLayout(layout)
-        self.w_build_net = QPushButton('Build Network')
+        self.w_build_net = QPushButton('Build VoxelNet')
         self.w_build_net.clicked.connect(self.on_BuildVxNetPressed)
 
-        self.w_load_ckpt = QPushButton('load Network checkpoint')
+        self.w_load_ckpt = QPushButton('load VoxelNet checkpoint')
         self.w_load_ckpt.clicked.connect(self.on_loadVxNetCkptPressed)
         h_layout = QHBoxLayout()
         h_layout.addWidget(self.w_build_net)
         h_layout.addWidget(self.w_load_ckpt)
         control_panel_layout.addLayout(h_layout)
-        self.w_inference = QPushButton('Inference Network')
+        self.w_inference = QPushButton('inferenct VoxelNet')
         self.w_inference.clicked.connect(self.on_InferenceVxNetPressed)
         control_panel_layout.addWidget(self.w_inference)
-        self.w_load_infer = QPushButton('Load and Inference Network')
+        self.w_load_infer = QPushButton('Load and Inferenct VoxelNet')
         self.w_load_infer.clicked.connect(self.on_LoadInferenceVxNetPressed)
         control_panel_layout.addWidget(self.w_load_infer)
-        # self.w_eval_net = QPushButton('Evaluation VoxelNet')
-        # self.w_eval_net.clicked.connect(self.on_EvalVxNetPressed)
-        # control_panel_layout.addWidget(self.w_eval_net)
+        self.w_eval_net = QPushButton('Evaluation VoxelNet')
+        self.w_eval_net.clicked.connect(self.on_EvalVxNetPressed)
+        control_panel_layout.addWidget(self.w_eval_net)
         layout = QFormLayout()
         self.w_cb_gt_curcls = QCheckBox("Indexed by GroundTruth Class")
         self.w_cb_gt_curcls.setChecked(True)
@@ -682,7 +808,8 @@ class KittiViewer(QMainWindow):
         center_widget.setLayout(self.center_layout)
         self.setCentralWidget(center_widget)
         self.show()
-
+        self.on_loadButtonPressed()
+        # self.on_plotButtonPressed()
     def on_panel_clicked(self):
         if self.w_config.isHidden():
             self.w_config.show()
@@ -799,7 +926,6 @@ class KittiViewer(QMainWindow):
         self.root_path = Path(self.w_root_path.text())
         if not (self.root_path / "training").exists():
             self.error("ERROR: your root path is incorrect.")
-            return
         self.json_setting.set("kitti_root_path", str(self.root_path))
         info_path = self.w_info_path.text()
         if info_path == '':
@@ -822,7 +948,7 @@ class KittiViewer(QMainWindow):
                 self.info(groups)
                 self.db_sampler = DataBaseSamplerV2(self.db_infos, groups, global_rot_range=global_rot_range)
         self.info("load db_infos.")
-        self.image_idxes = [info['image_idx'] for info in self.kitti_infos]
+        self.image_idxes = [info["image"]['image_idx'] for info in self.kitti_infos]
         self.info("load", len(self.kitti_infos), "infos.")
         current_class = self.gt_combobox.currentText()
         if current_class == "All":
@@ -885,12 +1011,14 @@ class KittiViewer(QMainWindow):
 
         sampled_difficulty = []
         # class_names = ["Car"]
-        rect = self.kitti_info['calib/R0_rect']
-        P2 = self.kitti_info['calib/P2']
-        Trv2c = self.kitti_info['calib/Tr_velo_to_cam']
+        pc_info = self.kitti_info["point_cloud"]
+        calib = self.kitti_info["calib"]
+        rect = calib['R0_rect']
+        P2 = calib['P2']
+        Trv2c = calib['Tr_velo_to_cam']
         num_features = 4
-        if 'pointcloud_num_features' in self.kitti_info:
-            num_features = self.kitti_info['pointcloud_num_features']
+        if 'num_features' in pc_info:
+            num_features = pc_info['num_features']
 
         # class_names = self.w_config.get("UsedClass")
         # class_names_group = [["trailer", "tractor"]]
@@ -905,10 +1033,7 @@ class KittiViewer(QMainWindow):
                 self.gt_names,
                 num_features,
                 False,
-                gt_group_ids=self.group_ids,
-                rect=rect,
-                Trv2c=Trv2c,
-                P2=P2)
+                gt_group_ids=self.group_ids)
             if sampled_dict is not None:
                 sampled_gt_names = sampled_dict["gt_names"]
                 sampled_gt_boxes = sampled_dict["gt_boxes"]
@@ -987,16 +1112,18 @@ class KittiViewer(QMainWindow):
         if self.kitti_info is None:
             self.error("you must load infos and choose a existing image idx first.")
             return
-        if self.gt_boxes is None:
-            return
-        rect = self.kitti_info['calib/R0_rect']
-        P2 = self.kitti_info['calib/P2']
-        Trv2c = self.kitti_info['calib/Tr_velo_to_cam']
+
+        calib = self.kitti_info["calib"]
+        rect = calib['R0_rect']
+        P2 = calib['P2']
+        Trv2c = calib['Tr_velo_to_cam']
         gt_boxes_camera = box_np_ops.box_lidar_to_camera(
             self.gt_boxes, rect, Trv2c)
         boxes_3d = box_np_ops.center_to_corner_box3d(gt_boxes_camera[:, :3],
                                                      gt_boxes_camera[:, 3:6],
-                                                     gt_boxes_camera[:, 6])
+                                                     gt_boxes_camera[:, 6],
+                                                     origin=[0.5, 1.0, 0.5],
+                                                     axis=1)
         boxes_3d = boxes_3d.reshape((-1, 3))
         boxes_3d_p2 = box_np_ops.project_to_image(boxes_3d, P2)
         boxes_3d_p2 = boxes_3d_p2.reshape([-1, 8, 2])
@@ -1012,9 +1139,11 @@ class KittiViewer(QMainWindow):
         dt_box_color = self.w_config.get("DTBoxColor")[:3]
         dt_box_color = (*dt_box_color, self.w_config.get("DTBoxAlpha"))
 
-        rect = self.kitti_info['calib/R0_rect']
-        P2 = self.kitti_info['calib/P2']
-        Trv2c = self.kitti_info['calib/Tr_velo_to_cam']
+        pc_info = self.kitti_info["point_cloud"]
+        calib = self.kitti_info["calib"]
+        rect = calib['R0_rect']
+        P2 = calib['P2']
+        Trv2c = calib['Tr_velo_to_cam']
         # detection_anno = kitti.remove_low_height(detection_anno, 25)
         detection_anno = kitti.remove_low_score(detection_anno, self.w_config.get("DTScoreThreshold"))
         
@@ -1022,6 +1151,8 @@ class KittiViewer(QMainWindow):
         
         dt_boxes_corners, scores, dt_box_lidar = kitti_anno_to_corners(
             self.kitti_info, detection_anno)
+        print("DEBUG", dt_box_lidar)
+        print("DEBUG Scores", scores)
         if self.gt_boxes is not None:
             iou = _riou3d_shapely(self.gt_boxes, dt_box_lidar)
             if iou.shape[0] != 0:
@@ -1078,7 +1209,7 @@ class KittiViewer(QMainWindow):
                 self.gt_boxes[:, :3],
                 self.gt_boxes[:, 3:6],
                 self.gt_boxes[:, 6],
-                origin=[0.5, 0.5, 0],
+                origin=[0.5, 0.5, 0.5],
                 axis=2)
             # print(self.gt_boxes[:, 6])
             # print(self.gt_boxes[:, :3])
@@ -1092,6 +1223,8 @@ class KittiViewer(QMainWindow):
         if self.kitti_info is None:
             self.error("you must load infos and choose a existing image idx first.")
             return
+        pc_info = self.kitti_info["point_cloud"]
+        image_info = self.kitti_info["image"]
 
         point_color = self.w_config.get("PointColor")[:3]
         point_color = (*point_color, self.w_config.get("PointAlpha"))
@@ -1103,13 +1236,15 @@ class KittiViewer(QMainWindow):
             self.w_config.get("PointSize"),
             dtype=np.float32)
         # self.w_pc_viewer.draw_point_cloud(self.points, color=points_rgb, with_reflectivity=False, size=0.1)
-        self.w_pc_viewer.draw_bounding_box()
-        idx = self.image_idxes.index(self.kitti_info["image_idx"])
+        # self.w_pc_viewer.draw_bounding_box()
+        idx = self.image_idxes.index(image_info["image_idx"])
         if 'annos' in self.kitti_info:
             # poses = np.zeros([self.gt_boxes.shape[0], 3])
             # self.w_pc_viewer.circles(
             #     "circles", poses, np.linalg.norm(
             #         self.gt_boxes[:, :3], axis=-1))
+            # self.w_pc_viewer.draw_anchors_trunk(
+            #     self.gt_boxes, self.points, gt_names=gt_names)
             # self.w_pc_viewer.draw_anchors_v1(
             #     self.gt_boxes, self.points, gt_names=gt_names)
             # self.w_pc_viewer.draw_frustum(bboxes, rect, Trv2c, P2)
@@ -1136,6 +1271,27 @@ class KittiViewer(QMainWindow):
 
         self.w_pc_viewer.scatter(
             "pointcloud", self.points[:, :3], point_color, size=point_size)
+        """
+        coors_range = np.array(self.w_config.get("CoorsRange"), dtype=np.float32)
+        bv_range = coors_range[[0, 1, 3, 4]]
+        voxel_size = np.array(self.w_config.get("VoxelSize"), dtype=np.float32)
+        grid_size = (coors_range[3:] - coors_range[:3]) / voxel_size
+        grid_size = np.round(grid_size).astype(np.int64)
+
+        foo_map_size = grid_size[:2]
+        # foo_map_size = [200, 200]
+        x = np.arange(foo_map_size[0])
+        y = np.arange(foo_map_size[1])
+        shift = coors_range[:2]
+        x = x * voxel_size[0] + shift[0] + 0.5 * voxel_size[0]
+        y = y * voxel_size[1] + shift[1] + 0.5 * voxel_size[1]
+        xy1, xy2 = np.meshgrid(x, y)
+        
+        def gaussian2d(x, y, A, ux=0, uy=0, stdx=1, stdy=1):
+            return A * np.exp(-0.5 * ((x - ux) / stdx) ** 2 - 0.5 * ((y - uy) / stdy) ** 2)
+        z = gaussian2d(xy1, xy2, 0, 0, 2, 2) - 20
+        self.w_pc_viewer.surface("test", x, y, z, GLColor.Purple, 0.5)
+        """
 
     def load_info(self, image_idx):
         if self.kitti_infos is None:
@@ -1148,11 +1304,14 @@ class KittiViewer(QMainWindow):
         self.json_setting.set("image_idx", str(image_idx))
         idx = self.image_idxes.index(image_idx)
         self.kitti_info = self.kitti_infos[idx]
+        pc_info = self.kitti_info["point_cloud"]
+        image_info = self.kitti_info["image"]
+        calib = self.kitti_info["calib"]
         if "timestamp" in self.kitti_info:
             self.message("timestamp", self.kitti_info["timestamp"])
         image = None
-        if 'img_path' in self.kitti_info:
-            img_path = self.kitti_info['img_path']
+        if 'image_path' in image_info:
+            img_path = image_info['image_path']
             if img_path != "":
                 image = io.imread(str(self.root_path / img_path))
                 self.current_image = image
@@ -1161,20 +1320,20 @@ class KittiViewer(QMainWindow):
                 self.current_image = None
         else:
             self.current_image = None
-        v_path = str(self.root_path / self.kitti_info['velodyne_path'])
+        v_path = str(self.root_path / pc_info['velodyne_path'])
         num_features = 4
-        if 'pointcloud_num_features' in self.kitti_info:
-            num_features = self.kitti_info['pointcloud_num_features']
+        if 'num_features' in pc_info:
+            num_features = pc_info['num_features']
 
         points = np.fromfile(
             v_path, dtype=np.float32, count=-1).reshape([-1, num_features])
         self.points = points
-        rect = self.kitti_info['calib/R0_rect']
-        P2 = self.kitti_info['calib/P2']
-        Trv2c = self.kitti_info['calib/Tr_velo_to_cam']
+        rect = calib['R0_rect'].astype(np.float32)
+        Trv2c = calib['Tr_velo_to_cam'].astype(np.float32)
+        P2 = calib['P2'].astype(np.float32)
         image_shape = None
-        if 'img_shape' in self.kitti_info:
-            image_shape = self.kitti_info['img_shape']
+        if 'image_shape' in image_info:
+            image_shape = image_info['image_shape']
             # self.info("num_points before remove:", self.points.shape[0])
             if self.w_config.get("RemoveOutsidePoint"):
                 self.points = box_np_ops.remove_outside_points(
@@ -1201,14 +1360,9 @@ class KittiViewer(QMainWindow):
                 [loc, dims, rots[..., np.newaxis]], axis=1)
             self.gt_boxes = box_np_ops.box_camera_to_lidar(
                 gt_boxes_camera, rect, Trv2c)
-            
+            box_np_ops.change_box3d_center_(self.gt_boxes, [0.5, 0.5, 0], [0.5, 0.5, 0.5])
             if 'group_ids' in annos:
                 self.group_ids = annos['group_ids'][:num_obj]
-        else:
-            self.gt_boxes = None
-            self.gt_names = None
-            self.difficulty = None
-            self.group_ids = None
         if self.w_config.get("EnableSample"):
             self.sample_to_current_data()
         if self.w_config.get("EnableAugmentation"):
@@ -1224,6 +1378,8 @@ class KittiViewer(QMainWindow):
                 annos = self.kitti_info['annos']
                 annos = kitti.filter_kitti_anno(annos,
                                                 self.w_config.get("UsedClass"))
+                print("DEBUG", self.w_config.get("UsedClass"))
+                print("DEBUG", len(annos['name']))
                 labels = annos['name']
                 num_obj = len([n for n in annos['name'] if n != 'DontCare'])
                 bbox_plot.draw_bbox_in_ax(
@@ -1254,6 +1410,18 @@ class KittiViewer(QMainWindow):
         if self.plot_all(image_idx):
             self.current_idx = self.image_idxes.index(image_idx)
 
+    def on_plotAllButtonPressed(self):
+        for idx in self.image_idxes:
+            self.plot_all(idx)
+            self.update()
+            self.w_pc_viewer.updateGL()
+            p = self.w_pc_viewer.grabFrameBuffer()
+            img_path = self.w_image_save_path.text()
+            img_path = str(Path(img_path).parent / f"{idx}.jpg")
+            p.save(img_path, 'jpg', 100)
+            self.info("image saved to", img_path)
+            print("image saved to", img_path)
+
     def closeEvent(self, event):
         config_str = self.w_config.dumps()
         self.json_setting.set("config", config_str)
@@ -1262,7 +1430,7 @@ class KittiViewer(QMainWindow):
     def on_configchanged(self, msg):
         # self.warning(msg.name, msg.value)
         # save config to file
-        idx = self.image_idxes.index(self.kitti_info["image_idx"])
+        idx = self.image_idxes.index(self.kitti_info["image"]["image_idx"])
         config_str = self.w_config.dumps()
         self.json_setting.set("config", config_str)
         pc_redraw_msgs = ["PointSize", "PointAlpha", "GTPointSize"]
@@ -1300,7 +1468,10 @@ class KittiViewer(QMainWindow):
         self.info("load VoxelNet ckpt succeed.")
 
     def on_BuildVxNetPressed(self):
-        self.inference_ctx = TorchInferenceContext()
+        if self.w_config.get("TensorflowInference"):
+            self.inference_ctx = TFInferenceContext()
+        else:
+            self.inference_ctx = TorchInferenceContext()
         vconfig_path = Path(self.w_vconfig_path.text())
         self.inference_ctx.build(vconfig_path)
         self.json_setting.set("latest_vxnet_cfg_path", str(vconfig_path))
@@ -1412,5 +1583,7 @@ class KittiViewer(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    print("++++++????")
     ex = KittiViewer()
+    print(ex.kitti_info)
     sys.exit(app.exec_())

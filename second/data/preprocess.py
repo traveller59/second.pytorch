@@ -15,7 +15,7 @@ from second.data import kitti_common as kitti
 from second.utils import simplevis
 
 
-def merge_second_batch(batch_list, unlabeled_training=False):
+def merge_second_batch(batch_list):
     example_merged = defaultdict(list)
     for example in batch_list:
         for k, v in example.items():
@@ -25,15 +25,11 @@ def merge_second_batch(batch_list, unlabeled_training=False):
     example_merged.pop("num_voxels")
     for key, elems in example_merged.items():
         if key in [
-                'voxels', 'num_points', 'num_gt', 'gt_boxes', 'voxel_labels',
-                'match_indices'
+                'voxels', 'num_points', 'num_gt', 'gt_boxes', 'voxel_labels'
         ]:
             ret[key] = np.concatenate(elems, axis=0)
         elif key == 'metadata':
             ret[key] = elems
-
-        elif key == 'match_indices_num':
-            ret[key] = np.concatenate(elems, axis=0)
         elif key == "calib":
             ret[key] = {}
             for elem in elems:
@@ -46,31 +42,13 @@ def merge_second_batch(batch_list, unlabeled_training=False):
                 ret[key][k1] = np.stack(v1, axis=0)
         elif key == 'coordinates':
             coors = []
-            if unlabeled_training:
-                batch_idx = 0
-                for i, coor in enumerate(elems):
-                    idx = 0
-                    for voxel_num in voxel_nums_list[i]:
-                        coor_pad = np.pad(
-                            coor[idx:idx + voxel_num], ((0, 0), (1, 0)),
-                            mode='constant',
-                            constant_values=batch_idx)
-                        coors.append(coor_pad)
-                        idx += voxel_num
-                        batch_idx += 1
-            else:
-                for i, coor in enumerate(elems):
-                    coor_pad = np.pad(
-                        coor, ((0, 0), (1, 0)),
-                        mode='constant',
-                        constant_values=i)
-                    coors.append(coor_pad)
+            for i, coor in enumerate(elems):
+                coor_pad = np.pad(
+                    coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
+                coors.append(coor_pad)
             ret[key] = np.concatenate(coors, axis=0)
         else:
-            if unlabeled_training:
-                ret[key] = np.concatenate(elems, axis=0)
-            else:
-                ret[key] = np.stack(elems, axis=0)
+            ret[key] = np.stack(elems, axis=0)
     return ret
 
 
@@ -88,20 +66,17 @@ def prep_pointcloud(input_dict,
                     target_assigner,
                     db_sampler=None,
                     max_voxels=20000,
-                    class_names=['Car'],
                     remove_outside_points=False,
                     training=True,
                     create_targets=True,
                     shuffle_points=False,
-                    reduce_valid_area=False,
                     remove_unknown=False,
-                    gt_rotation_noise=[-np.pi / 3, np.pi / 3],
-                    gt_loc_noise_std=[1.0, 1.0, 1.0],
-                    global_rotation_noise=[-np.pi / 4, np.pi / 4],
-                    global_scaling_noise=[0.95, 1.05],
-                    global_random_rot_range=[0.78, 2.35],
-                    generate_bev=False,
-                    without_reflectivity=False,
+                    gt_rotation_noise=(-np.pi / 3, np.pi / 3),
+                    gt_loc_noise_std=(1.0, 1.0, 1.0),
+                    global_rotation_noise=(-np.pi / 4, np.pi / 4),
+                    global_scaling_noise=(0.95, 1.05),
+                    global_random_rot_range=(0.78, 2.35),
+                    global_translate_noise_std=(0, 0, 0),
                     num_point_features=4,
                     anchor_area_threshold=1,
                     gt_points_drop=0.0,
@@ -111,74 +86,44 @@ def prep_pointcloud(input_dict,
                     remove_environment=False,
                     random_crop=False,
                     reference_detections=None,
-                    add_rgb_to_points=False,
-                    unlabeled_db_sampler=None,
-                    downsample_factor=2,
-                    min_gt_point_dict=None,
-                    bev_only=False,
+                    out_size_factor=2,
                     use_group_id=False,
                     out_dtype=np.float32):
     """convert point cloud to voxels, create targets if ground truths 
     exists.
 
-    input_dict format: 
-    {
-        points: [N, 3+]
-        ground_truth: {
-            gt_boxes: [num_gt, 7], must in lidar coord, must be center format
-            gt_names: [num_gt], must be np.ndarray, dtype=np.str
-            [optional]difficulty: [num_gt]
-            [optional]group_ids: [num_gt]
-        }
-        [optional, for kitti]image: {
-            image_shape: ...
-            image_idx: ...
-            image_path: ...
-        }
-        [optional, for kitti]calib: {
-            rect: ...
-            Trv2c: ...
-            P2: ...
-        }
-    }
+    input_dict format: dataset.get_sensor_data format
 
     """
     # t = time.time()
-    points = input_dict["points"]
+    class_names = target_assigner.classes
+    points = input_dict["lidar"]["points"]
     if training:
-        ground_truth_dict = input_dict["ground_truth"]
+        anno_dict = input_dict["lidar"]["annotations"]
         gt_dict = {
-            "gt_boxes": ground_truth_dict["gt_boxes"],
-            "gt_names": ground_truth_dict["gt_names"]
+            "gt_boxes": anno_dict["boxes"],
+            "gt_names": anno_dict["names"],
         }
-        if "difficulty" not in ground_truth_dict:
-            difficulty = np.zeros([ground_truth_dict["gt_boxes"].shape[0]],
+        if "difficulty" not in anno_dict:
+            difficulty = np.zeros([anno_dict["boxes"].shape[0]],
                                   dtype=np.int32)
             gt_dict["difficulty"] = difficulty
-        if use_group_id and "group_ids" in ground_truth_dict:
-            group_ids = ground_truth_dict["group_ids"]
+        else:
+            gt_dict["difficulty"] = anno_dict["difficulty"]
+        if use_group_id and "group_ids" in anno_dict:
+            group_ids = anno_dict["group_ids"]
             gt_dict["group_ids"] = group_ids
     calib = None
     if "calib" in input_dict:
         calib = input_dict["calib"]
 
-    if add_rgb_to_points:
-        assert calib is not None and "image" in input_dict
-        image_path = input_dict["image"]["image_path"]
-        image = imgio.imread(str(pathlib.Path(root_path) / image_path)).astype(
-            np.float32) / 255
-        points_rgb = box_np_ops.add_rgb_to_points(points, image, calib["rect"],
-                                                  calib["Trv2c"], calib["P2"])
-        points = np.concatenate([points, points_rgb], axis=1)
-        num_point_features += 3
     if reference_detections is not None:
         assert calib is not None and "image" in input_dict
-        C, R, T = box_np_ops.projection_matrix_to_CRT_kitti(calib["P2"])
+        C, R, T = box_np_ops.projection_matrix_to_CRT_kitti(P2)
         frustums = box_np_ops.get_frustum_v2(reference_detections, C)
         frustums -= T
         frustums = np.einsum('ij, akj->aki', np.linalg.inv(R), frustums)
-        frustums = box_np_ops.camera_to_lidar(frustums, calib["rect"],
-                                              calib["Trv2c"])
+        frustums = box_np_ops.camera_to_lidar(frustums, rect, Trv2c)
         surfaces = box_np_ops.corner_to_surfaces_3d_jit(frustums)
         masks = points_in_convex_polygon_3d_jit(points, surfaces)
         points = points[masks.any(-1)]
@@ -189,14 +134,14 @@ def prep_pointcloud(input_dict,
         points = box_np_ops.remove_outside_points(
             points, calib["rect"], calib["Trv2c"], calib["P2"], image_shape)
     if remove_environment is True and training:
-        selected = kitti.keep_arrays_by_name(gt_dict["gt_names"], class_names)
+        selected = kitti.keep_arrays_by_name(gt_names, target_assigner.classes)
         _dict_select(gt_dict, selected)
         masks = box_np_ops.points_in_rbbox(points, gt_dict["gt_boxes"])
         points = points[masks.any(-1)]
 
     if training:
         # boxes_lidar = gt_dict["gt_boxes"]
-        # bev_map = simplevis.kitti_vis(points, boxes_lidar)
+        # bev_map = simplevis.nuscene_vis(points, boxes_lidar)
         # cv2.imshow('pre-noise', bev_map)
         selected = kitti.drop_arrays_by_name(gt_dict["gt_names"], ["DontCare"])
         _dict_select(gt_dict, selected)
@@ -209,6 +154,7 @@ def prep_pointcloud(input_dict,
             """
             keep_mask = np.logical_not(remove_mask)
             _dict_select(gt_dict, keep_mask)
+        gt_dict.pop("difficulty")
         gt_boxes_mask = np.array(
             [n in class_names for n in gt_dict["gt_names"]], dtype=np.bool_)
         if db_sampler is not None:
@@ -248,9 +194,6 @@ def prep_pointcloud(input_dict,
 
                 points = np.concatenate([sampled_points, points], axis=0)
         pc_range = voxel_generator.point_cloud_range
-        if bev_only:  # set z and h to limits
-            gt_dict["gt_boxes"][:, 2] = pc_range[2]
-            gt_dict["gt_boxes"][:, 5] = pc_range[5] - pc_range[2]
         group_ids = None
         if "group_ids" in gt_dict:
             group_ids = gt_dict["group_ids"]
@@ -266,6 +209,8 @@ def prep_pointcloud(input_dict,
             num_try=100)
 
         # should remove unrelated objects after noise per object
+        # for k, v in gt_dict.items():
+        #     print(k, v.shape)
         _dict_select(gt_dict, gt_boxes_mask)
         gt_classes = np.array(
             [class_names.index(n) + 1 for n in gt_dict["gt_names"]],
@@ -278,7 +223,7 @@ def prep_pointcloud(input_dict,
             gt_dict["gt_boxes"], points, rotation=global_rotation_noise)
         gt_dict["gt_boxes"], points = prep.global_scaling_v2(
             gt_dict["gt_boxes"], points, *global_scaling_noise)
-
+        prep.global_translate_(gt_dict["gt_boxes"], points, global_translate_noise_std)
         bv_range = voxel_generator.point_cloud_range[[0, 1, 3, 4]]
         mask = prep.filter_gt_box_outside_range(gt_dict["gt_boxes"], bv_range)
         _dict_select(gt_dict, mask)
@@ -288,7 +233,7 @@ def prep_pointcloud(input_dict,
             gt_dict["gt_boxes"][:, 6], offset=0.5, period=2 * np.pi)
 
         # boxes_lidar = gt_dict["gt_boxes"]
-        # bev_map = simplevis.kitti_vis(points, boxes_lidar)
+        # bev_map = simplevis.nuscene_vis(points, boxes_lidar)
         # cv2.imshow('post-noise', bev_map)
         # cv2.waitKey(0)
 
@@ -312,7 +257,7 @@ def prep_pointcloud(input_dict,
     }
     if calib is not None:
         example["calib"] = calib
-    feature_map_size = grid_size[:2] // downsample_factor
+    feature_map_size = grid_size[:2] // out_size_factor
     feature_map_size = [*feature_map_size, 1][::-1]
     if anchor_cache is not None:
         anchors = anchor_cache["anchors"]

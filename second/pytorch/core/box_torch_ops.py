@@ -1,4 +1,5 @@
 import math
+from functools import reduce
 
 import numpy as np
 import torch
@@ -6,7 +7,6 @@ from torch import stack as tstack
 
 import torchplus
 from torchplus.tools import torch_to_np_dtype
-from second.core.box_np_ops import iou_jit
 from second.core.non_max_suppression.nms_gpu import (nms_gpu, rotate_iou_gpu,
                                                        rotate_nms_gpu)
 from second.core.non_max_suppression.nms_cpu import rotate_nms_cc
@@ -61,7 +61,7 @@ def second_box_decode(box_encodings, anchors, encode_angle_to_vector=False, smoo
 
     else:
         xt, yt, zt, wt, lt, ht, rt = torch.split(box_encodings, 1, dim=-1)
-
+    # za = za + ha / 2
     # xt, yt, zt, wt, lt, ht, rt = torch.split(box_encodings, 1, dim=-1)
     diagonal = torch.sqrt(la**2 + wa**2)
     xg = xt * diagonal + xa
@@ -84,6 +84,7 @@ def second_box_decode(box_encodings, anchors, encode_angle_to_vector=False, smoo
         rg = torch.atan2(rgy, rgx)
     else:
         rg = rt + ra
+    # zg = zg - hg / 2
     return torch.cat([xg, yg, zg, wg, lg, hg, rg], dim=-1)
 
 def bev_box_encode(boxes, anchors, encode_angle_to_vector=False, smooth_dim=False):
@@ -244,8 +245,8 @@ def rotation_3d_in_axis(points, angles, axis=0):
         ])
     else:
         raise ValueError("axis should in range")
-
-    return torch.einsum('aij,jka->aik', (points, rot_mat_T))
+    # print(points.shape, rot_mat_T.shape)
+    return torch.einsum('aij,jka->aik', points, rot_mat_T)
 
 
 def rotation_points_single_angle(points, angle, axis=0):
@@ -255,21 +256,21 @@ def rotation_points_single_angle(points, angle, axis=0):
     point_type = torchplus.get_tensor_class(points)
     if axis == 1:
         rot_mat_T = torch.stack([
-            torch.tensor([rot_cos, 0, -rot_sin], dtype=points.dtype, device=points.device),
-            torch.tensor([0, 1, 0], dtype=points.dtype, device=points.device),
-            torch.tensor([rot_sin, 0, rot_cos], dtype=points.dtype, device=points.device)
+            point_type([rot_cos, 0, -rot_sin]),
+            point_type([0, 1, 0]),
+            point_type([rot_sin, 0, rot_cos])
         ])
     elif axis == 2 or axis == -1:
         rot_mat_T = torch.stack([
-            torch.tensor([rot_cos, -rot_sin, 0], dtype=points.dtype, device=points.device),
-            torch.tensor([rot_sin, rot_cos, 0], dtype=points.dtype, device=points.device),
-            torch.tensor([0, 0, 1], dtype=points.dtype, device=points.device)
+            point_type([rot_cos, -rot_sin, 0]),
+            point_type([rot_sin, rot_cos, 0]),
+            point_type([0, 0, 1])
         ])
     elif axis == 0:
         rot_mat_T = torch.stack([
-            torch.tensor([1, 0, 0], dtype=points.dtype, device=points.device),
-            torch.tensor([0, rot_cos, -rot_sin], dtype=points.dtype, device=points.device),
-            torch.tensor([0, rot_sin, rot_cos], dtype=points.dtype, device=points.device)
+            point_type([1, 0, 0]),
+            point_type([0, rot_cos, -rot_sin]),
+            point_type([0, rot_sin, rot_cos])
         ])
     else:
         raise ValueError("axis should in range")
@@ -297,7 +298,7 @@ def rotation_2d(points, angles):
 def center_to_corner_box3d(centers,
                            dims,
                            angles,
-                           origin=0.5,
+                           origin=(0.5, 0.5, 0.5),
                            axis=1):
     """convert kitti locations, dimensions and angles to corners
     
@@ -341,7 +342,6 @@ def center_to_corner_box2d(centers, dims, angles=None, origin=0.5):
         corners = rotation_2d(corners, angles)
     corners += centers.view(-1, 1, 2)
     return corners
-
 
 def project_to_image(points_3d, proj_mat):
     points_num = list(points_3d.shape)[:-1]
@@ -453,13 +453,12 @@ def nms(bboxes,
         ret = np.array(nms_gpu(dets_np, iou_threshold), dtype=np.int64)
         keep = ret[:post_max_size]
     if keep.shape[0] == 0:
-        return None
+        return torch.zeros([0]).long().to(bboxes.device)
     if pre_max_size is not None:
-        keep = torch.from_numpy(keep).long().cuda()
+        keep = torch.from_numpy(keep).long().to(bboxes.device)
         return indices[keep]
     else:
-        return torch.from_numpy(keep).long().cuda()
-
+        return torch.from_numpy(keep).long().to(bboxes.device)
 
 def rotate_nms(rbboxes,
                scores,
@@ -479,9 +478,9 @@ def rotate_nms(rbboxes,
         ret = np.array(rotate_nms_cc(dets_np, iou_threshold), dtype=np.int64)
         keep = ret[:post_max_size]
     if keep.shape[0] == 0:
-        return None
+        return torch.zeros([0]).long().to(rbboxes.device)
     if pre_max_size is not None:
-        keep = torch.from_numpy(keep).long().cuda()
+        keep = torch.from_numpy(keep).long().to(rbboxes.device)
         return indices[keep]
     else:
-        return torch.from_numpy(keep).long().cuda()
+        return torch.from_numpy(keep).long().to(rbboxes.device)

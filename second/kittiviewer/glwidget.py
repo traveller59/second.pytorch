@@ -180,7 +180,7 @@ class KittiGLViewWidget(gl.GLViewWidget):
 
 
     def scatter(self, name, points, colors=GLColor.Write, alphas=0.5,
-                size=0.1, translucent=False):
+                size=0.1, translucent=True):
         # if isinstance(colors, tuple):
         #     colors = gl_color(colors, alphas)
         colors = _extend_color_if_necessary(colors, points.shape[0], alphas)
@@ -409,6 +409,7 @@ class KittiGLViewWidget(gl.GLViewWidget):
         super().mousePressEvent(ev)
         self.mousePressed.emit((ev.x(), ev.y()))
         # print(ev.x(), ev.y())
+    """
     def mouseReleaseEvent(self, ev):
 
         # Example item selection code:
@@ -451,3 +452,4 @@ class KittiGLViewWidget(gl.GLViewWidget):
         #region = (region[0], self.height()-(region[1]+region[3]), region[2], region[3])
         #self.paintGL(region=region)
         #self.swapBuffers()
+    """

@@ -28,8 +28,9 @@ message LocalizationLoss {
   oneof localization_loss {
     WeightedL2LocalizationLoss weighted_l2 = 1;
     WeightedSmoothL1LocalizationLoss weighted_smooth_l1 = 2;
+    WeightedGHMLocalizationLoss weighted_ghm = 3;
   }
-  bool encode_rad_error_by_sin = 3;
+  bool encode_rad_error_by_sin = 4;
 }
 
 // L2 location loss: 0.5 * ||weight * (a - b)|| ^ 2
@@ -48,6 +49,15 @@ message WeightedSmoothL1LocalizationLoss {
   float sigma = 2;
   repeated float code_weight = 3;
 }
+message WeightedGHMLocalizationLoss {
+  // DEPRECATED, do not use.
+  // Output loss per anchor.
+  bool anchorwise_output = 1;
+  float mu = 2;
+  int32 bins = 3;
+  float momentum = 4;
+  repeated float code_weight = 5;
+}
 
 
 // Configuration for class prediction loss function.
@@ -58,6 +68,7 @@ message ClassificationLoss {
     BootstrappedSigmoidClassificationLoss bootstrapped_sigmoid = 3;
     SigmoidFocalClassificationLoss weighted_sigmoid_focal = 4;
     SoftmaxFocalClassificationLoss weighted_softmax_focal = 5;
+    GHMClassificationLoss weighted_ghm = 6;
   }
 }
 
@@ -87,6 +98,11 @@ message SoftmaxFocalClassificationLoss {
   float gamma = 2;
   // alpha weighting factor for the loss.
   float alpha = 3;
+}
+message GHMClassificationLoss {
+  bool anchorwise_output = 1;
+  int32 bins = 2;
+  float momentum = 3;
 }
 // Classification loss using a softmax function over class predictions.
 message WeightedSoftmaxClassificationLoss {

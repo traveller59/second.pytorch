@@ -26,8 +26,6 @@ def unmap(data, count, inds, fill=0):
     return ret
 
 
-
-
 def create_target_np(all_anchors,
                      gt_boxes,
                      similarity_fn,
@@ -91,7 +89,7 @@ def create_target_np(all_anchors,
     gt_ids = np.empty((num_inside, ), dtype=np.int32)
     labels.fill(-1)
     gt_ids.fill(-1)
-    if len(gt_boxes) > 0 and anchors.shape[0] > 0:
+    if len(gt_boxes) > 0:
         # Compute overlaps between the anchors and the gt boxes overlaps
         anchor_by_gt_overlap = similarity_fn(anchors, gt_boxes)
         # Map from anchor to gt box that has highest overlap
@@ -102,12 +100,19 @@ def create_target_np(all_anchors,
         # Map from gt box to an anchor that has highest overlap
         gt_to_anchor_argmax = anchor_by_gt_overlap.argmax(axis=0)
         # For each gt box, amount of overlap with most overlapping anchor
-        gt_to_anchor_max = anchor_by_gt_overlap[
-            gt_to_anchor_argmax,
-            np.arange(anchor_by_gt_overlap.shape[1])]
+        gt_to_anchor_max = anchor_by_gt_overlap[gt_to_anchor_argmax,
+                                                np.arange(anchor_by_gt_overlap.
+                                                          shape[1])]
         # must remove gt which doesn't match any anchor.
         empty_gt_mask = gt_to_anchor_max == 0
         gt_to_anchor_max[empty_gt_mask] = -1
+        """
+        if not np.all(empty_gt_mask):
+            gt_to_anchor_max = gt_to_anchor_max[empty_gt_mask]
+            anchor_by_gt_overlap = anchor_by_gt_overlap[:, empty_gt_mask]
+            gt_classes = gt_classes[empty_gt_mask]
+            gt_boxes = gt_boxes[empty_gt_mask]
+        """
         # Find all anchors that share the max overlap amount
         # (this includes many ties)
         anchors_with_max_overlap = np.where(
@@ -128,7 +133,7 @@ def create_target_np(all_anchors,
         bg_inds = np.arange(num_inside)
     fg_inds = np.where(labels > 0)[0]
     fg_max_overlap = None
-    if len(gt_boxes) > 0 and anchors.shape[0] > 0:
+    if len(gt_boxes) > 0:
         fg_max_overlap = anchor_to_gt_max[fg_inds]
     gt_pos_ids = gt_ids[fg_inds]
     # bg_inds = np.where(anchor_to_gt_max < unmatched_threshold)[0]
@@ -152,15 +157,15 @@ def create_target_np(all_anchors,
             labels[enable_inds] = 0
         bg_inds = np.where(labels == 0)[0]
     else:
-        if len(gt_boxes) == 0 or anchors.shape[0] == 0:
+        if len(gt_boxes) == 0:
             labels[:] = 0
         else:
             labels[bg_inds] = 0
             # re-enable anchors_with_max_overlap
             labels[anchors_with_max_overlap] = gt_classes[gt_inds_force]
-    bbox_targets = np.zeros(
-        (num_inside, box_code_size), dtype=all_anchors.dtype)
-    if len(gt_boxes) > 0 and anchors.shape[0] > 0:
+    bbox_targets = np.zeros((num_inside, box_code_size),
+                            dtype=all_anchors.dtype)
+    if len(gt_boxes) > 0:
         # print(anchors[fg_inds, :].shape, gt_boxes[anchor_to_gt_argmax[fg_inds], :].shape)
         # bbox_targets[fg_inds, :] = box_encoding_fn(
         #     anchors[fg_inds, :], gt_boxes[anchor_to_gt_argmax[fg_inds], :])

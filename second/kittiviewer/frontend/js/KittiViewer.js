@@ -4,6 +4,7 @@ var KittiViewer = function (pointCloud, logger, imageCanvas) {
     this.detPath = "/path/to/results.pkl";
     this.backend = "http://127.0.0.1:16666";
     this.checkpointPath = "/path/to/tckpt";
+    this.datasetClassName = "KittiDataset"
     this.configPath = "/path/to/config";
     this.drawDet = false;
     this.imageIndexes = [];
@@ -24,11 +25,14 @@ var KittiViewer = function (pointCloud, logger, imageCanvas) {
     this.image = '';
     this.enableInt16 = true;
     this.int16Factor = 100;
-    this.removeOutside = true;
+    this.removeOutside = false;
 };
 
 KittiViewer.prototype = {
     readCookies : function(){
+        if (CookiesKitti.get("kittiviewer_dataset_cname")){
+            this.datasetClassName = CookiesKitti.get("kittiviewer_dataset_cname");
+        }
         if (CookiesKitti.get("kittiviewer_backend")){
             this.backend = CookiesKitti.get("kittiviewer_backend");
         }
@@ -53,6 +57,7 @@ KittiViewer.prototype = {
         let data = {};
         data["root_path"] = this.rootPath;
         data["info_path"] = this.infoPath;
+        data["dataset_class_name"] = this.datasetClassName;
         return $.ajax({
             url: this.addhttp(this.backend) + '/api/readinfo',
             method: 'POST',
@@ -328,6 +333,7 @@ KittiViewer.prototype = {
             console.log("draw image");
             ctx.drawImage(image, 0, 0, w, h);
             let x1, y1, x2, y2;
+            /*
             for (var i = 0; i < self.gtBboxes.length; ++i){
                 ctx.beginPath();
                 x1 = self.gtBboxes[i][0] * w;
@@ -350,6 +356,7 @@ KittiViewer.prototype = {
                 ctx.strokeStyle = "blue";
                 ctx.stroke();    
             }
+            */
         };
         image.src = this.image;
 

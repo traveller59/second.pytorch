@@ -1,17 +1,16 @@
 import time
-from enum import Enum
-from functools import reduce
 
 import numpy as np
+import spconv
 import torch
 from torch import nn
 from torch.nn import functional as F
-import spconv
-import torchplus
+
+from second.pytorch.models.resnet import SparseBasicBlock
 from torchplus.nn import Empty, GroupNorm, Sequential
 from torchplus.ops.array_ops import gather_nd, scatter_nd
 from torchplus.tools import change_default_args
-from second.pytorch.models.resnet import SparseBasicBlock, SparseBottleneck
+
 
 class SparseMiddleExtractor(nn.Module):
     def __init__(self,
@@ -44,7 +43,8 @@ class SparseMiddleExtractor(nn.Module):
                             for i in range(len(num_filters) - 1)]
 
         for i, o in filters_pairs_d1:
-            middle_layers.append(spconv.SubMConv3d(i, o, 3, bias=False, indice_key="subm0"))
+            middle_layers.append(
+                spconv.SubMConv3d(i, o, 3, bias=False, indice_key="subm0"))
             middle_layers.append(BatchNorm1d(o))
             middle_layers.append(nn.ReLU())
         middle_layers.append(
@@ -62,7 +62,8 @@ class SparseMiddleExtractor(nn.Module):
         filters_pairs_d2 = [[num_filters[i], num_filters[i + 1]]
                             for i in range(len(num_filters) - 1)]
         for i, o in filters_pairs_d2:
-            middle_layers.append(spconv.SubMConv3d(i, o, 3, bias=False, indice_key="subm1"))
+            middle_layers.append(
+                spconv.SubMConv3d(i, o, 3, bias=False, indice_key="subm1"))
             middle_layers.append(BatchNorm1d(o))
             middle_layers.append(nn.ReLU())
         middle_layers.append(
@@ -77,7 +78,8 @@ class SparseMiddleExtractor(nn.Module):
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size)
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
         # t = time.time()
         # torch.cuda.synchronize()
         ret = self.middle_conv(ret)
@@ -87,6 +89,7 @@ class SparseMiddleExtractor(nn.Module):
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret
+
 
 class SpMiddleD4HD(nn.Module):
     def __init__(self,
@@ -129,7 +132,8 @@ class SpMiddleD4HD(nn.Module):
             SubMConv3d(32, 32, 3, indice_key="subm0"),
             BatchNorm1d(32),
             nn.ReLU(),
-            SpConv3d(32, 64, 3, 2, padding=1), # [800, 600, 21] -> [400, 300, 11]
+            SpConv3d(32, 64, 3, 2,
+                     padding=1),  # [800, 600, 21] -> [400, 300, 11]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm1"),
@@ -141,7 +145,8 @@ class SpMiddleD4HD(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm1"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, 3, 2, padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
+            SpConv3d(64, 64, 3, 2,
+                     padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm2"),
@@ -153,7 +158,8 @@ class SpMiddleD4HD(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm2"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, (3, 1, 1), (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
+            SpConv3d(64, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
             BatchNorm1d(64),
             nn.ReLU(),
         )
@@ -161,7 +167,8 @@ class SpMiddleD4HD(nn.Module):
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size)
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
         # t = time.time()
         # torch.cuda.synchronize()
         ret = self.middle_conv(ret)
@@ -171,6 +178,7 @@ class SpMiddleD4HD(nn.Module):
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret
+
 
 class SpResNetD4HD(nn.Module):
     def __init__(self,
@@ -212,17 +220,20 @@ class SpResNetD4HD(nn.Module):
             nn.ReLU(),
             SparseBasicBlock(32, 32, indice_key="res0"),
             SparseBasicBlock(32, 32, indice_key="res0"),
-            SpConv3d(32, 64, 3, 2, padding=1), # [800, 600, 21] -> [400, 300, 11]
+            SpConv3d(32, 64, 3, 2,
+                     padding=1),  # [800, 600, 21] -> [400, 300, 11]
             BatchNorm1d(64),
             nn.ReLU(),
             SparseBasicBlock(64, 64, indice_key="res1"),
             SparseBasicBlock(64, 64, indice_key="res1"),
-            SpConv3d(64, 64, 3, 2, padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
+            SpConv3d(64, 64, 3, 2,
+                     padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
             BatchNorm1d(64),
             nn.ReLU(),
             SparseBasicBlock(64, 64, indice_key="res2"),
             SparseBasicBlock(64, 64, indice_key="res2"),
-            SpConv3d(64, 64, (3, 1, 1), (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
+            SpConv3d(64, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
             BatchNorm1d(64),
             nn.ReLU(),
         )
@@ -230,14 +241,15 @@ class SpResNetD4HD(nn.Module):
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size)
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
         # t = time.time()
         # torch.cuda.synchronize()
         ret = self.middle_conv(ret)
         # torch.cuda.synchronize()
         # print("spconv forward time", time.time() - t)
         ret = ret.dense()
-        
+
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret
@@ -284,7 +296,8 @@ class SpMiddleD4HDLite(nn.Module):
             SubMConv3d(16, 16, 3, indice_key="subm0"),
             BatchNorm1d(16),
             nn.ReLU(),
-            SpConv3d(16, 32, 3, 2, padding=1), # [800, 600, 21] -> [400, 300, 11]
+            SpConv3d(16, 32, 3, 2,
+                     padding=1),  # [800, 600, 21] -> [400, 300, 11]
             BatchNorm1d(32),
             nn.ReLU(),
             SubMConv3d(32, 32, 3, indice_key="subm1"),
@@ -296,7 +309,8 @@ class SpMiddleD4HDLite(nn.Module):
             SubMConv3d(32, 32, 3, indice_key="subm1"),
             BatchNorm1d(32),
             nn.ReLU(),
-            SpConv3d(32, 64, 3, 2, padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
+            SpConv3d(32, 64, 3, 2,
+                     padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm2"),
@@ -308,7 +322,8 @@ class SpMiddleD4HDLite(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm2"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, (3, 1, 1), (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
+            SpConv3d(64, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
             BatchNorm1d(64),
             nn.ReLU(),
         )
@@ -316,14 +331,15 @@ class SpMiddleD4HDLite(nn.Module):
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size)
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
         # t = time.time()
         # torch.cuda.synchronize()
         ret = self.middle_conv(ret)
         # torch.cuda.synchronize()
         # print("spconv forward time", time.time() - t)
         ret = ret.dense()
-        
+
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret
@@ -369,7 +385,8 @@ class SpMiddleD8HD(nn.Module):
             SubMConv3d(16, 16, 3, indice_key="subm0"),
             BatchNorm1d(16),
             nn.ReLU(),
-            SpConv3d(16, 32, 3, 2, padding=1), # [800, 600, 41] -> [400, 300, 21]
+            SpConv3d(16, 32, 3, 2,
+                     padding=1),  # [800, 600, 41] -> [400, 300, 21]
             BatchNorm1d(32),
             nn.ReLU(),
             SubMConv3d(32, 32, 3, indice_key="subm1"),
@@ -381,7 +398,8 @@ class SpMiddleD8HD(nn.Module):
             SubMConv3d(32, 32, 3, indice_key="subm1"),
             BatchNorm1d(32),
             nn.ReLU(),
-            SpConv3d(32, 64, 3, 2, padding=1),  # [400, 300, 21] -> [200, 150, 11]
+            SpConv3d(32, 64, 3, 2,
+                     padding=1),  # [400, 300, 21] -> [200, 150, 11]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm2"),
@@ -393,7 +411,8 @@ class SpMiddleD8HD(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm2"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, 3, 2, padding=[0, 1, 1]),  # [200, 150, 11] -> [100, 75, 5]
+            SpConv3d(64, 64, 3, 2,
+                     padding=[0, 1, 1]),  # [200, 150, 11] -> [100, 75, 5]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm3"),
@@ -405,7 +424,8 @@ class SpMiddleD8HD(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm3"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, (3, 1, 1), (2, 1, 1)),  # [100, 75, 5] -> [100, 75, 2]
+            SpConv3d(64, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [100, 75, 5] -> [100, 75, 2]
             BatchNorm1d(64),
             nn.ReLU(),
         )
@@ -413,14 +433,15 @@ class SpMiddleD8HD(nn.Module):
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size)
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
         # t = time.time()
         # torch.cuda.synchronize()
         ret = self.middle_conv(ret)
         # torch.cuda.synchronize()
         # print("spconv forward time", time.time() - t)
         ret = ret.dense()
-        
+
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret
@@ -467,7 +488,8 @@ class SpMiddleFHD(nn.Module):
             SubMConv3d(16, 16, 3, indice_key="subm0"),
             BatchNorm1d(16),
             nn.ReLU(),
-            SpConv3d(16, 32, 3, 2, padding=1), # [1600, 1200, 41] -> [800, 600, 21]
+            SpConv3d(16, 32, 3, 2,
+                     padding=1),  # [1600, 1200, 41] -> [800, 600, 21]
             BatchNorm1d(32),
             nn.ReLU(),
             SubMConv3d(32, 32, 3, indice_key="subm1"),
@@ -476,7 +498,8 @@ class SpMiddleFHD(nn.Module):
             SubMConv3d(32, 32, 3, indice_key="subm1"),
             BatchNorm1d(32),
             nn.ReLU(),
-            SpConv3d(32, 64, 3, 2, padding=1), # [800, 600, 21] -> [400, 300, 11]
+            SpConv3d(32, 64, 3, 2,
+                     padding=1),  # [800, 600, 21] -> [400, 300, 11]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm2"),
@@ -488,7 +511,8 @@ class SpMiddleFHD(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm2"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, 3, 2, padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
+            SpConv3d(64, 64, 3, 2,
+                     padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm3"),
@@ -500,7 +524,8 @@ class SpMiddleFHD(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm3"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, (3, 1, 1), (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
+            SpConv3d(64, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
             BatchNorm1d(64),
             nn.ReLU(),
         )
@@ -510,17 +535,210 @@ class SpMiddleFHD(nn.Module):
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size)
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
         # t = time.time()
         # torch.cuda.synchronize()
         ret = self.middle_conv(ret)
         # torch.cuda.synchronize()
         # print("spconv forward time", time.time() - t)
         ret = ret.dense()
-        
+
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret
+
+
+class SpMiddleFHDPeople(nn.Module):
+    def __init__(self,
+                 output_shape,
+                 use_norm=True,
+                 num_input_features=128,
+                 num_filters_down1=[64],
+                 num_filters_down2=[64, 64],
+                 name='SpMiddleFHD'):
+        super(SpMiddleFHDPeople, self).__init__()
+        self.name = name
+        if use_norm:
+            BatchNorm2d = change_default_args(
+                eps=1e-3, momentum=0.01)(nn.BatchNorm2d)
+            BatchNorm1d = change_default_args(
+                eps=1e-3, momentum=0.01)(nn.BatchNorm1d)
+            Conv2d = change_default_args(bias=False)(nn.Conv2d)
+            SpConv3d = change_default_args(bias=False)(spconv.SparseConv3d)
+            SubMConv3d = change_default_args(bias=False)(spconv.SubMConv3d)
+            ConvTranspose2d = change_default_args(bias=False)(
+                nn.ConvTranspose2d)
+        else:
+            BatchNorm2d = Empty
+            BatchNorm1d = Empty
+            Conv2d = change_default_args(bias=True)(nn.Conv2d)
+            SpConv3d = change_default_args(bias=True)(spconv.SparseConv3d)
+            SubMConv3d = change_default_args(bias=True)(spconv.SubMConv3d)
+            ConvTranspose2d = change_default_args(bias=True)(
+                nn.ConvTranspose2d)
+        sparse_shape = np.array(output_shape[1:4]) + [1, 0, 0]
+        # sparse_shape[0] = 11
+        print(sparse_shape)
+        self.sparse_shape = sparse_shape
+        self.voxel_output_shape = output_shape
+        # input: # [1600, 1200, 41]
+        self.middle_conv = spconv.SparseSequential(
+            SubMConv3d(num_input_features, 16, 3, indice_key="subm0"),
+            BatchNorm1d(16),
+            nn.ReLU(),
+            SubMConv3d(16, 16, 3, indice_key="subm0"),
+            BatchNorm1d(16),
+            nn.ReLU(),
+            SpConv3d(16, 32, 3, 2,
+                     padding=1),  # [1600, 1200, 21] -> [800, 600, 11]
+            BatchNorm1d(32),
+            nn.ReLU(),
+            SubMConv3d(32, 32, 3, indice_key="subm1"),
+            BatchNorm1d(32),
+            nn.ReLU(),
+            SubMConv3d(32, 32, 3, indice_key="subm1"),
+            BatchNorm1d(32),
+            nn.ReLU(),
+            SpConv3d(32, 64, 3, 2,
+                     padding=[0, 1, 1]),  # [800, 600, 11] -> [400, 300, 5]
+            BatchNorm1d(64),
+            nn.ReLU(),
+            SubMConv3d(64, 64, 3, indice_key="subm2"),
+            BatchNorm1d(64),
+            nn.ReLU(),
+            SubMConv3d(64, 64, 3, indice_key="subm2"),
+            BatchNorm1d(64),
+            nn.ReLU(),
+            SubMConv3d(64, 64, 3, indice_key="subm2"),
+            BatchNorm1d(64),
+            nn.ReLU(),
+            SpConv3d(64, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [400, 300, 5] -> [400, 300, 2]
+            BatchNorm1d(64),
+            nn.ReLU(),
+        )
+        self.max_batch_size = 6
+        # self.grid = torch.full([self.max_batch_size, *sparse_shape], -1, dtype=torch.int32).cuda()
+
+    def forward(self, voxel_features, coors, batch_size):
+        # coors[:, 1] += 1
+        coors = coors.int()
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
+        # t = time.time()
+        # torch.cuda.synchronize()
+        ret = self.middle_conv(ret)
+        # torch.cuda.synchronize()
+        # print("spconv forward time", time.time() - t)
+        ret = ret.dense()
+
+        N, C, D, H, W = ret.shape
+        ret = ret.view(N, C * D, H, W)
+        return ret
+
+
+class SpMiddle2KPeople(nn.Module):
+    def __init__(self,
+                 output_shape,
+                 use_norm=True,
+                 num_input_features=128,
+                 num_filters_down1=[64],
+                 num_filters_down2=[64, 64],
+                 name='SpMiddleFHD'):
+        super(SpMiddle2KPeople, self).__init__()
+        self.name = name
+        if use_norm:
+            BatchNorm2d = change_default_args(
+                eps=1e-3, momentum=0.01)(nn.BatchNorm2d)
+            BatchNorm1d = change_default_args(
+                eps=1e-3, momentum=0.01)(nn.BatchNorm1d)
+            Conv2d = change_default_args(bias=False)(nn.Conv2d)
+            SpConv3d = change_default_args(bias=False)(spconv.SparseConv3d)
+            SubMConv3d = change_default_args(bias=False)(spconv.SubMConv3d)
+            ConvTranspose2d = change_default_args(bias=False)(
+                nn.ConvTranspose2d)
+        else:
+            BatchNorm2d = Empty
+            BatchNorm1d = Empty
+            Conv2d = change_default_args(bias=True)(nn.Conv2d)
+            SpConv3d = change_default_args(bias=True)(spconv.SparseConv3d)
+            SubMConv3d = change_default_args(bias=True)(spconv.SubMConv3d)
+            ConvTranspose2d = change_default_args(bias=True)(
+                nn.ConvTranspose2d)
+        sparse_shape = np.array(output_shape[1:4]) + [1, 0, 0]
+        # sparse_shape[0] = 11
+        print(sparse_shape)
+        self.sparse_shape = sparse_shape
+        self.voxel_output_shape = output_shape
+        # input: # [1600, 1200, 41]
+        self.middle_conv = spconv.SparseSequential(
+            SubMConv3d(num_input_features, 8, 3, indice_key="subm0"),
+            BatchNorm1d(8),
+            nn.ReLU(),
+            SubMConv3d(8, 8, 3, indice_key="subm0"),
+            BatchNorm1d(8),
+            nn.ReLU(),
+            SpConv3d(8, 16, 3, 2,
+                     padding=1),  # [1600, 1200, 21] -> [800, 600, 11]
+            BatchNorm1d(16),
+            nn.ReLU(),
+            SubMConv3d(16, 16, 3, indice_key="subm1"),
+            BatchNorm1d(16),
+            nn.ReLU(),
+            SubMConv3d(16, 16, 3, indice_key="subm1"),
+            BatchNorm1d(16),
+            nn.ReLU(),
+            SpConv3d(16, 32, 3, 2,
+                     padding=1),  # [800, 600, 11] -> [400, 300, 5]
+            BatchNorm1d(32),
+            nn.ReLU(),
+            SubMConv3d(32, 32, 3, indice_key="subm2"),
+            BatchNorm1d(32),
+            nn.ReLU(),
+            SubMConv3d(32, 32, 3, indice_key="subm2"),
+            BatchNorm1d(32),
+            nn.ReLU(),
+            SubMConv3d(32, 32, 3, indice_key="subm2"),
+            BatchNorm1d(32),
+            nn.ReLU(),
+            SpConv3d(32, 64, 3, 2,
+                     padding=[0, 1, 1]),  # [800, 600, 11] -> [400, 300, 5]
+            BatchNorm1d(64),
+            nn.ReLU(),
+            SubMConv3d(64, 64, 3, indice_key="subm3"),
+            BatchNorm1d(64),
+            nn.ReLU(),
+            SubMConv3d(64, 64, 3, indice_key="subm3"),
+            BatchNorm1d(64),
+            nn.ReLU(),
+            SubMConv3d(64, 64, 3, indice_key="subm3"),
+            BatchNorm1d(64),
+            nn.ReLU(),
+            SpConv3d(64, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [400, 300, 5] -> [400, 300, 2]
+            BatchNorm1d(64),
+            nn.ReLU(),
+        )
+        self.max_batch_size = 6
+        # self.grid = torch.full([self.max_batch_size, *sparse_shape], -1, dtype=torch.int32).cuda()
+
+    def forward(self, voxel_features, coors, batch_size):
+        # coors[:, 1] += 1
+        coors = coors.int()
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
+        # t = time.time()
+        # torch.cuda.synchronize()
+        ret = self.middle_conv(ret)
+        # torch.cuda.synchronize()
+        # print("spconv forward time", time.time() - t)
+        ret = ret.dense()
+
+        N, C, D, H, W = ret.shape
+        ret = ret.view(N, C * D, H, W)
+        return ret
+
 
 class SpMiddleFHDV2(nn.Module):
     def __init__(self,
@@ -563,7 +781,8 @@ class SpMiddleFHDV2(nn.Module):
             SubMConv3d(16, 16, 3, indice_key="subm0"),
             BatchNorm1d(16),
             nn.ReLU(),
-            SpConv3d(16, 32, 3, 2, padding=1), # [1600, 1200, 41] -> [800, 600, 21]
+            SpConv3d(16, 32, 3, 2,
+                     padding=1),  # [1600, 1200, 41] -> [800, 600, 21]
             BatchNorm1d(32),
             nn.ReLU(),
             SubMConv3d(32, 32, 3, indice_key="subm1"),
@@ -572,7 +791,8 @@ class SpMiddleFHDV2(nn.Module):
             SubMConv3d(32, 32, 3, indice_key="subm1"),
             BatchNorm1d(32),
             nn.ReLU(),
-            SpConv3d(32, 64, 3, 2, padding=1), # [800, 600, 21] -> [400, 300, 11]
+            SpConv3d(32, 64, 3, 2,
+                     padding=1),  # [800, 600, 21] -> [400, 300, 11]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm2"),
@@ -584,7 +804,8 @@ class SpMiddleFHDV2(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm2"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, 3, 2, padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
+            SpConv3d(64, 64, 3, 2,
+                     padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm3"),
@@ -596,28 +817,33 @@ class SpMiddleFHDV2(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm3"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, (3, 1, 1), (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
+            SpConv3d(64, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
             BatchNorm1d(64),
             nn.ReLU(),
             spconv.SparseMaxPool3d([2, 1, 1]),
         )
         self.max_batch_size = 6
-        self.grid = torch.full([self.max_batch_size, *sparse_shape], -1, dtype=torch.int32).cuda()
+        self.grid = torch.full([self.max_batch_size, *sparse_shape],
+                               -1,
+                               dtype=torch.int32).cuda()
 
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size, self.grid)
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size, self.grid)
         # t = time.time()
         # torch.cuda.synchronize()
         ret = self.middle_conv(ret)
         # torch.cuda.synchronize()
         # print("spconv forward time", time.time() - t)
         ret = ret.dense()
-        
+
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret
+
 
 class SpMiddle2K(nn.Module):
     def __init__(self,
@@ -654,13 +880,16 @@ class SpMiddle2K(nn.Module):
         self.voxel_output_shape = output_shape
         # input: # [1600, 1200, 41]
         self.middle_conv = spconv.SparseSequential(
-            SubMConv3d(num_input_features, 8, 3, indice_key="subm0"), # [3200, 2400, 81] -> [1600, 1200, 41]
+            SubMConv3d(
+                num_input_features, 8, 3,
+                indice_key="subm0"),  # [3200, 2400, 81] -> [1600, 1200, 41]
             BatchNorm1d(8),
             nn.ReLU(),
             SubMConv3d(8, 8, 3, indice_key="subm0"),
             BatchNorm1d(8),
             nn.ReLU(),
-            SpConv3d(8, 16, 3, 2, padding=1), # [1600, 1200, 41] -> [800, 600, 21]
+            SpConv3d(8, 16, 3, 2,
+                     padding=1),  # [1600, 1200, 41] -> [800, 600, 21]
             BatchNorm1d(16),
             nn.ReLU(),
             SubMConv3d(16, 16, 3, indice_key="subm1"),
@@ -669,7 +898,8 @@ class SpMiddle2K(nn.Module):
             SubMConv3d(16, 16, 3, indice_key="subm1"),
             BatchNorm1d(16),
             nn.ReLU(),
-            SpConv3d(16, 32, 3, 2, padding=1), # [1600, 1200, 41] -> [800, 600, 21]
+            SpConv3d(16, 32, 3, 2,
+                     padding=1),  # [1600, 1200, 41] -> [800, 600, 21]
             BatchNorm1d(32),
             nn.ReLU(),
             SubMConv3d(32, 32, 3, indice_key="subm2"),
@@ -678,7 +908,8 @@ class SpMiddle2K(nn.Module):
             SubMConv3d(32, 32, 3, indice_key="subm2"),
             BatchNorm1d(32),
             nn.ReLU(),
-            SpConv3d(32, 64, 3, 2, padding=1), # [800, 600, 21] -> [400, 300, 11]
+            SpConv3d(32, 64, 3, 2,
+                     padding=1),  # [800, 600, 21] -> [400, 300, 11]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm3"),
@@ -690,7 +921,8 @@ class SpMiddle2K(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm3"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, 3, 2, padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
+            SpConv3d(64, 64, 3, 2,
+                     padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm4"),
@@ -702,27 +934,32 @@ class SpMiddle2K(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm4"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, (3, 1, 1), (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
+            SpConv3d(64, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
             BatchNorm1d(64),
             nn.ReLU(),
         )
         self.max_batch_size = 3
-        self.grid = torch.full([self.max_batch_size, *sparse_shape], -1, dtype=torch.int32).cuda()
+        self.grid = torch.full([self.max_batch_size, *sparse_shape],
+                               -1,
+                               dtype=torch.int32).cuda()
 
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size, self.grid)
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size, self.grid)
         # t = time.time()
         # torch.cuda.synchronize()
         ret = self.middle_conv(ret)
         # torch.cuda.synchronize()
         # print("spconv forward time", time.time() - t)
         ret = ret.dense()
-        
+
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret
+
 
 class SpMiddleFHDLite(nn.Module):
     def __init__(self,
@@ -759,16 +996,81 @@ class SpMiddleFHDLite(nn.Module):
         self.voxel_output_shape = output_shape
         # input: # [1600, 1200, 41]
         self.middle_conv = spconv.SparseSequential(
-            SpConv3d(num_input_features, 16, 3, 2, padding=1), # [1600, 1200, 41] -> [800, 600, 21]
+            SpConv3d(num_input_features, 16, 3, 2,
+                     padding=1),  # [1600, 1200, 41] -> [800, 600, 21]
             BatchNorm1d(16),
             nn.ReLU(),
-            SpConv3d(16, 32, 3, 2, padding=1), # [800, 600, 21] -> [400, 300, 11]
+            SpConv3d(16, 32, 3, 2,
+                     padding=1),  # [800, 600, 21] -> [400, 300, 11]
             BatchNorm1d(32),
             nn.ReLU(),
-            SpConv3d(32, 64, 3, 2, padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
+            SpConv3d(32, 64, 3, 2,
+                     padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 64, (3, 1, 1), (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
+            SpConv3d(64, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
+            BatchNorm1d(64),
+            nn.ReLU(),
+        )
+
+    def forward(self, voxel_features, coors, batch_size):
+        coors = coors.int()
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
+        ret = self.middle_conv(ret)
+        ret = ret.dense()
+
+        N, C, D, H, W = ret.shape
+        ret = ret.view(N, C * D, H, W)
+        return ret
+
+
+class SpMiddleHDLite(nn.Module):
+    def __init__(self,
+                 output_shape,
+                 use_norm=True,
+                 num_input_features=128,
+                 num_filters_down1=[64],
+                 num_filters_down2=[64, 64],
+                 name='SpMiddleHDLite'):
+        super(SpMiddleHDLite, self).__init__()
+        self.name = name
+        if use_norm:
+            BatchNorm2d = change_default_args(
+                eps=1e-3, momentum=0.01)(nn.BatchNorm2d)
+            BatchNorm1d = change_default_args(
+                eps=1e-3, momentum=0.01)(nn.BatchNorm1d)
+            Conv2d = change_default_args(bias=False)(nn.Conv2d)
+            SpConv3d = change_default_args(bias=False)(spconv.SparseConv3d)
+            SubMConv3d = change_default_args(bias=False)(spconv.SubMConv3d)
+            ConvTranspose2d = change_default_args(bias=False)(
+                nn.ConvTranspose2d)
+        else:
+            BatchNorm2d = Empty
+            BatchNorm1d = Empty
+            Conv2d = change_default_args(bias=True)(nn.Conv2d)
+            SpConv3d = change_default_args(bias=True)(spconv.SparseConv3d)
+            SubMConv3d = change_default_args(bias=True)(spconv.SubMConv3d)
+            ConvTranspose2d = change_default_args(bias=True)(
+                nn.ConvTranspose2d)
+        sparse_shape = np.array(output_shape[1:4]) + [1, 0, 0]
+        # sparse_shape[0] = 11
+        print(sparse_shape)
+        self.sparse_shape = sparse_shape
+        self.voxel_output_shape = output_shape
+        # input: # [1600, 1200, 41]
+        self.middle_conv = spconv.SparseSequential(
+            SpConv3d(num_input_features, 16, 3, 2,
+                     padding=1),  # [800, 600, 21] -> [400, 300, 11]
+            BatchNorm1d(16),
+            nn.ReLU(),
+            SpConv3d(16, 32, 3, 2,
+                     padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
+            BatchNorm1d(32),
+            nn.ReLU(),
+            SpConv3d(32, 64, (3, 1, 1),
+                     (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
             BatchNorm1d(64),
             nn.ReLU(),
         )
@@ -776,14 +1078,11 @@ class SpMiddleFHDLite(nn.Module):
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size)
-        # t = time.time()
-        # torch.cuda.synchronize()
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
         ret = self.middle_conv(ret)
-        # torch.cuda.synchronize()
-        # print("spconv forward time", time.time() - t)
         ret = ret.dense()
-        
+
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret
@@ -829,22 +1128,26 @@ class SpMiddleResNetFHD(nn.Module):
             nn.ReLU(),
             SparseBasicBlock(16, 16, indice_key="res0"),
             SparseBasicBlock(16, 16, indice_key="res0"),
-            SpConv3d(16, 32, 3, 2, padding=1), # [1600, 1200, 41] -> [800, 600, 21]
+            SpConv3d(16, 32, 3, 2,
+                     padding=1),  # [1600, 1200, 41] -> [800, 600, 21]
             BatchNorm1d(32),
             nn.ReLU(),
             SparseBasicBlock(32, 32, indice_key="res1"),
             SparseBasicBlock(32, 32, indice_key="res1"),
-            SpConv3d(32, 64, 3, 2, padding=1), # [800, 600, 21] -> [400, 300, 11]
+            SpConv3d(32, 64, 3, 2,
+                     padding=1),  # [800, 600, 21] -> [400, 300, 11]
             BatchNorm1d(64),
             nn.ReLU(),
             SparseBasicBlock(64, 64, indice_key="res2"),
             SparseBasicBlock(64, 64, indice_key="res2"),
-            SpConv3d(64, 128, 3, 2, padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
+            SpConv3d(64, 128, 3, 2,
+                     padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
             BatchNorm1d(128),
             nn.ReLU(),
             SparseBasicBlock(128, 128, indice_key="res3"),
             SparseBasicBlock(128, 128, indice_key="res3"),
-            SpConv3d(128, 128, (3, 1, 1), (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
+            SpConv3d(128, 128, (3, 1, 1),
+                     (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
             BatchNorm1d(128),
             nn.ReLU(),
         )
@@ -852,14 +1155,15 @@ class SpMiddleResNetFHD(nn.Module):
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size)
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
         # t = time.time()
         # torch.cuda.synchronize()
         ret = self.middle_conv(ret)
         # torch.cuda.synchronize()
         # print("spconv forward time", time.time() - t)
         ret = ret.dense()
-        
+
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret
@@ -906,7 +1210,8 @@ class SpMiddleFHDLarge(nn.Module):
             SubMConv3d(16, 16, 3, indice_key="subm0"),
             BatchNorm1d(16),
             nn.ReLU(),
-            SpConv3d(16, 32, 3, 2, padding=1), # [1600, 1200, 41] -> [800, 600, 21]
+            SpConv3d(16, 32, 3, 2,
+                     padding=1),  # [1600, 1200, 41] -> [800, 600, 21]
             BatchNorm1d(32),
             nn.ReLU(),
             SubMConv3d(32, 32, 3, indice_key="subm1"),
@@ -915,7 +1220,8 @@ class SpMiddleFHDLarge(nn.Module):
             SubMConv3d(32, 32, 3, indice_key="subm1"),
             BatchNorm1d(32),
             nn.ReLU(),
-            SpConv3d(32, 64, 3, 2, padding=1), # [800, 600, 21] -> [400, 300, 11]
+            SpConv3d(32, 64, 3, 2,
+                     padding=1),  # [800, 600, 21] -> [400, 300, 11]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(64, 64, 3, indice_key="subm2"),
@@ -927,7 +1233,8 @@ class SpMiddleFHDLarge(nn.Module):
             SubMConv3d(64, 64, 3, indice_key="subm2"),
             BatchNorm1d(64),
             nn.ReLU(),
-            SpConv3d(64, 128, 3, 2, padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
+            SpConv3d(64, 128, 3, 2,
+                     padding=[0, 1, 1]),  # [400, 300, 11] -> [200, 150, 5]
             BatchNorm1d(64),
             nn.ReLU(),
             SubMConv3d(128, 128, 3, indice_key="subm3"),
@@ -939,7 +1246,8 @@ class SpMiddleFHDLarge(nn.Module):
             SubMConv3d(128, 128, 3, indice_key="subm3"),
             BatchNorm1d(128),
             nn.ReLU(),
-            SpConv3d(128, 128, (3, 1, 1), (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
+            SpConv3d(128, 128, (3, 1, 1),
+                     (2, 1, 1)),  # [200, 150, 5] -> [200, 150, 2]
             BatchNorm1d(128),
             nn.ReLU(),
         )
@@ -947,14 +1255,15 @@ class SpMiddleFHDLarge(nn.Module):
     def forward(self, voxel_features, coors, batch_size):
         # coors[:, 1] += 1
         coors = coors.int()
-        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape, batch_size)
+        ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
+                                      batch_size)
         # t = time.time()
         # torch.cuda.synchronize()
         ret = self.middle_conv(ret)
         # torch.cuda.synchronize()
         # print("spconv forward time", time.time() - t)
         ret = ret.dense()
-        
+
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
         return ret

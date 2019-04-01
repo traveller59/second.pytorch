@@ -8,7 +8,6 @@ message TargetAssigner{
     repeated AnchorGeneratorCollection anchor_generators = 1;
     float sample_positive_fraction = 2;
     uint32 sample_size = 3;
-    bool use_rotate_iou = 4;
-    string class_name = 5;
-    RegionSimilarityCalculator region_similarity_calculator = 6;
+    string class_name = 4;
+    RegionSimilarityCalculator region_similarity_calculator = 5;
 }

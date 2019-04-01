@@ -111,9 +111,9 @@ def point_to_vis_bev(points,
                      coors_range=None,
                      max_voxels=80000):
     if voxel_size is None:
-        voxel_size = (0.1, 0.1, 0.1)
+        voxel_size = [0.1, 0.1, 0.1]
     if coors_range is None:
-        coors_range = (-50, -50, -3, 50, 50, 1)
+        coors_range = [-50, -50, -3, 50, 50, 1]
     voxel_size[2] = coors_range[5] - coors_range[2]
     bev_map = points_to_bev(
         points, voxel_size, coors_range, max_voxels=max_voxels)
@@ -182,9 +182,18 @@ def draw_box_in_bev(img,
                             thickness * 2)
     return img
 
+
 def kitti_vis(points, boxes, labels=None):
     vis_voxel_size = [0.1, 0.1, 0.1]
     vis_point_range = [0, -30, -3, 64, 30, 1]
+    bev_map = point_to_vis_bev(points, vis_voxel_size, vis_point_range)
+    bev_map = draw_box_in_bev(bev_map, vis_point_range, boxes, [0, 255, 0], 2, labels)
+
+    return bev_map
+
+def nuscene_vis(points, boxes, labels=None):
+    vis_voxel_size = [0.1, 0.1, 0.1]
+    vis_point_range = [-50, -50, -3, 50, 50, 1]
     bev_map = point_to_vis_bev(points, vis_voxel_size, vis_point_range)
     bev_map = draw_box_in_bev(bev_map, vis_point_range, boxes, [0, 255, 0], 2, labels)
 

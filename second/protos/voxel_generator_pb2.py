@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='second.protos',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n#second/protos/voxel_generator.proto\x12\rsecond.protos\"\xbc\x01\n\x0eVoxelGenerator\x12\x12\n\nvoxel_size\x18\x01 \x03(\x02\x12\x19\n\x11point_cloud_range\x18\x02 \x03(\x02\x12&\n\x1emax_number_of_points_per_voxel\x18\x03 \x01(\r\x12\x19\n\x11submanifold_group\x18\x04 \x01(\x08\x12\x18\n\x10submanifold_size\x18\x05 \x03(\r\x12\x1e\n\x16submanifold_max_points\x18\x06 \x01(\rb\x06proto3')
+  serialized_pb=_b('\n#second/protos/voxel_generator.proto\x12\rsecond.protos\"g\n\x0eVoxelGenerator\x12\x12\n\nvoxel_size\x18\x01 \x03(\x02\x12\x19\n\x11point_cloud_range\x18\x02 \x03(\x02\x12&\n\x1emax_number_of_points_per_voxel\x18\x03 \x01(\rb\x06proto3')
 )
 
 
@@ -53,27 +53,6 @@ _VOXELGENERATOR = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='submanifold_group', full_name='second.protos.VoxelGenerator.submanifold_group', index=3,
-      number=4, type=8, cpp_type=7, label=1,
-      has_default_value=False, default_value=False,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='submanifold_size', full_name='second.protos.VoxelGenerator.submanifold_size', index=4,
-      number=5, type=13, cpp_type=3, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='submanifold_max_points', full_name='second.protos.VoxelGenerator.submanifold_max_points', index=5,
-      number=6, type=13, cpp_type=3, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -86,8 +65,8 @@ _VOXELGENERATOR = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=55,
-  serialized_end=243,
+  serialized_start=54,
+  serialized_end=157,
 )
 
 DESCRIPTOR.message_types_by_name['VoxelGenerator'] = _VOXELGENERATOR

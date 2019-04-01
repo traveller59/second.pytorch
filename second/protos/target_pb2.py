@@ -21,7 +21,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='second.protos',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x1asecond/protos/target.proto\x12\rsecond.protos\x1a\x1bsecond/protos/anchors.proto\x1a\x1esecond/protos/similarity.proto\"\x89\x02\n\x0eTargetAssigner\x12\x43\n\x11\x61nchor_generators\x18\x01 \x03(\x0b\x32(.second.protos.AnchorGeneratorCollection\x12 \n\x18sample_positive_fraction\x18\x02 \x01(\x02\x12\x13\n\x0bsample_size\x18\x03 \x01(\r\x12\x16\n\x0euse_rotate_iou\x18\x04 \x01(\x08\x12\x12\n\nclass_name\x18\x05 \x01(\t\x12O\n\x1cregion_similarity_calculator\x18\x06 \x01(\x0b\x32).second.protos.RegionSimilarityCalculatorb\x06proto3')
+  serialized_pb=_b('\n\x1asecond/protos/target.proto\x12\rsecond.protos\x1a\x1bsecond/protos/anchors.proto\x1a\x1esecond/protos/similarity.proto\"\xf1\x01\n\x0eTargetAssigner\x12\x43\n\x11\x61nchor_generators\x18\x01 \x03(\x0b\x32(.second.protos.AnchorGeneratorCollection\x12 \n\x18sample_positive_fraction\x18\x02 \x01(\x02\x12\x13\n\x0bsample_size\x18\x03 \x01(\r\x12\x12\n\nclass_name\x18\x04 \x01(\t\x12O\n\x1cregion_similarity_calculator\x18\x05 \x01(\x0b\x32).second.protos.RegionSimilarityCalculatorb\x06proto3')
   ,
   dependencies=[second_dot_protos_dot_anchors__pb2.DESCRIPTOR,second_dot_protos_dot_similarity__pb2.DESCRIPTOR,])
 
@@ -57,22 +57,15 @@ _TARGETASSIGNER = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='use_rotate_iou', full_name='second.protos.TargetAssigner.use_rotate_iou', index=3,
-      number=4, type=8, cpp_type=7, label=1,
-      has_default_value=False, default_value=False,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='class_name', full_name='second.protos.TargetAssigner.class_name', index=4,
-      number=5, type=9, cpp_type=9, label=1,
+      name='class_name', full_name='second.protos.TargetAssigner.class_name', index=3,
+      number=4, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='region_similarity_calculator', full_name='second.protos.TargetAssigner.region_similarity_calculator', index=5,
-      number=6, type=11, cpp_type=10, label=1,
+      name='region_similarity_calculator', full_name='second.protos.TargetAssigner.region_similarity_calculator', index=4,
+      number=5, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -90,7 +83,7 @@ _TARGETASSIGNER = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=107,
-  serialized_end=372,
+  serialized_end=348,
 )
 
 _TARGETASSIGNER.fields_by_name['anchor_generators'].message_type = second_dot_protos_dot_anchors__pb2._ANCHORGENERATORCOLLECTION
