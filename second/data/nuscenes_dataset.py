@@ -434,7 +434,7 @@ def _fill_trainval_infos(nusc,
                          train_scenes,
                          val_scenes,
                          test=False,
-                         max_sweeps=10):
+                         max_sweeps=9):
     train_nusc_infos = []
     val_nusc_infos = []
     from pyquaternion import Quaternion
@@ -523,7 +523,7 @@ def _fill_trainval_infos(nusc,
     return train_nusc_infos, val_nusc_infos
 
 
-def create_nuscenes_infos(root_path, version="v1.0-trainval", max_sweeps=10):
+def create_nuscenes_infos(root_path, version="v1.0-trainval", max_sweeps=9):
     from nuscenes.nuscenes import NuScenes
     nusc = NuScenes(version=version, dataroot=root_path, verbose=True)
     from nuscenes.utils import splits
