@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='second.protos',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x1dsecond/protos/optimizer.proto\x12\rsecond.protos\"\xa5\x02\n\tOptimizer\x12=\n\x12rms_prop_optimizer\x18\x01 \x01(\x0b\x32\x1f.second.protos.RMSPropOptimizerH\x00\x12>\n\x12momentum_optimizer\x18\x02 \x01(\x0b\x32 .second.protos.MomentumOptimizerH\x00\x12\x36\n\x0e\x61\x64\x61m_optimizer\x18\x03 \x01(\x0b\x32\x1c.second.protos.AdamOptimizerH\x00\x12\x1a\n\x12use_moving_average\x18\x04 \x01(\x08\x12\x1c\n\x14moving_average_decay\x18\x05 \x01(\x02\x12\x1a\n\x12\x66ixed_weight_decay\x18\x06 \x01(\x08\x42\x0b\n\toptimizer\"\x9e\x01\n\x10RMSPropOptimizer\x12\x32\n\rlearning_rate\x18\x01 \x01(\x0b\x32\x1b.second.protos.LearningRate\x12 \n\x18momentum_optimizer_value\x18\x02 \x01(\x02\x12\r\n\x05\x64\x65\x63\x61y\x18\x03 \x01(\x02\x12\x0f\n\x07\x65psilon\x18\x04 \x01(\x02\x12\x14\n\x0cweight_decay\x18\x05 \x01(\x02\"\x7f\n\x11MomentumOptimizer\x12\x32\n\rlearning_rate\x18\x01 \x01(\x0b\x32\x1b.second.protos.LearningRate\x12 \n\x18momentum_optimizer_value\x18\x02 \x01(\x02\x12\x14\n\x0cweight_decay\x18\x03 \x01(\x02\"j\n\rAdamOptimizer\x12\x32\n\rlearning_rate\x18\x01 \x01(\x0b\x32\x1b.second.protos.LearningRate\x12\x14\n\x0cweight_decay\x18\x02 \x01(\x02\x12\x0f\n\x07\x61msgrad\x18\x03 \x01(\x08\"\x7f\n\x0cLearningRate\x12\x30\n\x0bmulti_phase\x18\x01 \x01(\x0b\x32\x19.second.protos.MultiPhaseH\x00\x12,\n\tone_cycle\x18\x02 \x01(\x0b\x32\x17.second.protos.OneCycleH\x00\x42\x0f\n\rlearning_rate\"U\n\x11LearningRatePhase\x12\r\n\x05start\x18\x01 \x01(\x02\x12\x13\n\x0blambda_func\x18\x02 \x01(\t\x12\x1c\n\x14momentum_lambda_func\x18\x03 \x01(\t\">\n\nMultiPhase\x12\x30\n\x06phases\x18\x01 \x03(\x0b\x32 .second.protos.LearningRatePhase\"O\n\x08OneCycle\x12\x0e\n\x06lr_max\x18\x01 \x01(\x02\x12\x0c\n\x04moms\x18\x02 \x03(\x02\x12\x12\n\ndiv_factor\x18\x03 \x01(\x02\x12\x11\n\tpct_start\x18\x04 \x01(\x02\x62\x06proto3')
+  serialized_pb=_b('\n\x1dsecond/protos/optimizer.proto\x12\rsecond.protos\"\xa5\x02\n\tOptimizer\x12=\n\x12rms_prop_optimizer\x18\x01 \x01(\x0b\x32\x1f.second.protos.RMSPropOptimizerH\x00\x12>\n\x12momentum_optimizer\x18\x02 \x01(\x0b\x32 .second.protos.MomentumOptimizerH\x00\x12\x36\n\x0e\x61\x64\x61m_optimizer\x18\x03 \x01(\x0b\x32\x1c.second.protos.AdamOptimizerH\x00\x12\x1a\n\x12use_moving_average\x18\x04 \x01(\x08\x12\x1c\n\x14moving_average_decay\x18\x05 \x01(\x02\x12\x1a\n\x12\x66ixed_weight_decay\x18\x06 \x01(\x08\x42\x0b\n\toptimizer\"\x9e\x01\n\x10RMSPropOptimizer\x12\x32\n\rlearning_rate\x18\x01 \x01(\x0b\x32\x1b.second.protos.LearningRate\x12 \n\x18momentum_optimizer_value\x18\x02 \x01(\x02\x12\r\n\x05\x64\x65\x63\x61y\x18\x03 \x01(\x02\x12\x0f\n\x07\x65psilon\x18\x04 \x01(\x02\x12\x14\n\x0cweight_decay\x18\x05 \x01(\x02\"\x7f\n\x11MomentumOptimizer\x12\x32\n\rlearning_rate\x18\x01 \x01(\x0b\x32\x1b.second.protos.LearningRate\x12 \n\x18momentum_optimizer_value\x18\x02 \x01(\x02\x12\x14\n\x0cweight_decay\x18\x03 \x01(\x02\"j\n\rAdamOptimizer\x12\x32\n\rlearning_rate\x18\x01 \x01(\x0b\x32\x1b.second.protos.LearningRate\x12\x14\n\x0cweight_decay\x18\x02 \x01(\x02\x12\x0f\n\x07\x61msgrad\x18\x03 \x01(\x08\"\xf7\x01\n\x0cLearningRate\x12\x30\n\x0bmulti_phase\x18\x01 \x01(\x0b\x32\x19.second.protos.MultiPhaseH\x00\x12,\n\tone_cycle\x18\x02 \x01(\x0b\x32\x17.second.protos.OneCycleH\x00\x12<\n\x11\x65xponential_decay\x18\x03 \x01(\x0b\x32\x1f.second.protos.ExponentialDecayH\x00\x12\x38\n\x0fmanual_stepping\x18\x04 \x01(\x0b\x32\x1d.second.protos.ManualSteppingH\x00\x42\x0f\n\rlearning_rate\"U\n\x11LearningRatePhase\x12\r\n\x05start\x18\x01 \x01(\x02\x12\x13\n\x0blambda_func\x18\x02 \x01(\t\x12\x1c\n\x14momentum_lambda_func\x18\x03 \x01(\t\">\n\nMultiPhase\x12\x30\n\x06phases\x18\x01 \x03(\x0b\x32 .second.protos.LearningRatePhase\"O\n\x08OneCycle\x12\x0e\n\x06lr_max\x18\x01 \x01(\x02\x12\x0c\n\x04moms\x18\x02 \x03(\x02\x12\x12\n\ndiv_factor\x18\x03 \x01(\x02\x12\x11\n\tpct_start\x18\x04 \x01(\x02\"p\n\x10\x45xponentialDecay\x12\x1d\n\x15initial_learning_rate\x18\x01 \x01(\x02\x12\x14\n\x0c\x64\x65\x63\x61y_length\x18\x02 \x01(\x02\x12\x14\n\x0c\x64\x65\x63\x61y_factor\x18\x03 \x01(\x02\x12\x11\n\tstaircase\x18\x04 \x01(\x08\"3\n\x0eManualStepping\x12\x12\n\nboundaries\x18\x01 \x03(\x02\x12\r\n\x05rates\x18\x02 \x03(\x02\x62\x06proto3')
 )
 
 
@@ -264,6 +264,20 @@ _LEARNINGRATE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='exponential_decay', full_name='second.protos.LearningRate.exponential_decay', index=2,
+      number=3, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='manual_stepping', full_name='second.protos.LearningRate.manual_stepping', index=3,
+      number=4, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -279,8 +293,8 @@ _LEARNINGRATE = _descriptor.Descriptor(
       name='learning_rate', full_name='second.protos.LearningRate.learning_rate',
       index=0, containing_type=None, fields=[]),
   ],
-  serialized_start=742,
-  serialized_end=869,
+  serialized_start=743,
+  serialized_end=990,
 )
 
 
@@ -324,8 +338,8 @@ _LEARNINGRATEPHASE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=871,
-  serialized_end=956,
+  serialized_start=992,
+  serialized_end=1077,
 )
 
 
@@ -355,8 +369,8 @@ _MULTIPHASE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=958,
-  serialized_end=1020,
+  serialized_start=1079,
+  serialized_end=1141,
 )
 
 
@@ -407,8 +421,98 @@ _ONECYCLE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1022,
-  serialized_end=1101,
+  serialized_start=1143,
+  serialized_end=1222,
+)
+
+
+_EXPONENTIALDECAY = _descriptor.Descriptor(
+  name='ExponentialDecay',
+  full_name='second.protos.ExponentialDecay',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='initial_learning_rate', full_name='second.protos.ExponentialDecay.initial_learning_rate', index=0,
+      number=1, type=2, cpp_type=6, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='decay_length', full_name='second.protos.ExponentialDecay.decay_length', index=1,
+      number=2, type=2, cpp_type=6, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='decay_factor', full_name='second.protos.ExponentialDecay.decay_factor', index=2,
+      number=3, type=2, cpp_type=6, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='staircase', full_name='second.protos.ExponentialDecay.staircase', index=3,
+      number=4, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=1224,
+  serialized_end=1336,
+)
+
+
+_MANUALSTEPPING = _descriptor.Descriptor(
+  name='ManualStepping',
+  full_name='second.protos.ManualStepping',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='boundaries', full_name='second.protos.ManualStepping.boundaries', index=0,
+      number=1, type=2, cpp_type=6, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='rates', full_name='second.protos.ManualStepping.rates', index=1,
+      number=2, type=2, cpp_type=6, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=1338,
+  serialized_end=1389,
 )
 
 _OPTIMIZER.fields_by_name['rms_prop_optimizer'].message_type = _RMSPROPOPTIMIZER
@@ -428,12 +532,20 @@ _MOMENTUMOPTIMIZER.fields_by_name['learning_rate'].message_type = _LEARNINGRATE
 _ADAMOPTIMIZER.fields_by_name['learning_rate'].message_type = _LEARNINGRATE
 _LEARNINGRATE.fields_by_name['multi_phase'].message_type = _MULTIPHASE
 _LEARNINGRATE.fields_by_name['one_cycle'].message_type = _ONECYCLE
+_LEARNINGRATE.fields_by_name['exponential_decay'].message_type = _EXPONENTIALDECAY
+_LEARNINGRATE.fields_by_name['manual_stepping'].message_type = _MANUALSTEPPING
 _LEARNINGRATE.oneofs_by_name['learning_rate'].fields.append(
   _LEARNINGRATE.fields_by_name['multi_phase'])
 _LEARNINGRATE.fields_by_name['multi_phase'].containing_oneof = _LEARNINGRATE.oneofs_by_name['learning_rate']
 _LEARNINGRATE.oneofs_by_name['learning_rate'].fields.append(
   _LEARNINGRATE.fields_by_name['one_cycle'])
 _LEARNINGRATE.fields_by_name['one_cycle'].containing_oneof = _LEARNINGRATE.oneofs_by_name['learning_rate']
+_LEARNINGRATE.oneofs_by_name['learning_rate'].fields.append(
+  _LEARNINGRATE.fields_by_name['exponential_decay'])
+_LEARNINGRATE.fields_by_name['exponential_decay'].containing_oneof = _LEARNINGRATE.oneofs_by_name['learning_rate']
+_LEARNINGRATE.oneofs_by_name['learning_rate'].fields.append(
+  _LEARNINGRATE.fields_by_name['manual_stepping'])
+_LEARNINGRATE.fields_by_name['manual_stepping'].containing_oneof = _LEARNINGRATE.oneofs_by_name['learning_rate']
 _MULTIPHASE.fields_by_name['phases'].message_type = _LEARNINGRATEPHASE
 DESCRIPTOR.message_types_by_name['Optimizer'] = _OPTIMIZER
 DESCRIPTOR.message_types_by_name['RMSPropOptimizer'] = _RMSPROPOPTIMIZER
@@ -443,6 +555,8 @@ DESCRIPTOR.message_types_by_name['LearningRate'] = _LEARNINGRATE
 DESCRIPTOR.message_types_by_name['LearningRatePhase'] = _LEARNINGRATEPHASE
 DESCRIPTOR.message_types_by_name['MultiPhase'] = _MULTIPHASE
 DESCRIPTOR.message_types_by_name['OneCycle'] = _ONECYCLE
+DESCRIPTOR.message_types_by_name['ExponentialDecay'] = _EXPONENTIALDECAY
+DESCRIPTOR.message_types_by_name['ManualStepping'] = _MANUALSTEPPING
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 Optimizer = _reflection.GeneratedProtocolMessageType('Optimizer', (_message.Message,), dict(
@@ -500,6 +614,20 @@ OneCycle = _reflection.GeneratedProtocolMessageType('OneCycle', (_message.Messag
   # @@protoc_insertion_point(class_scope:second.protos.OneCycle)
   ))
 _sym_db.RegisterMessage(OneCycle)
+
+ExponentialDecay = _reflection.GeneratedProtocolMessageType('ExponentialDecay', (_message.Message,), dict(
+  DESCRIPTOR = _EXPONENTIALDECAY,
+  __module__ = 'second.protos.optimizer_pb2'
+  # @@protoc_insertion_point(class_scope:second.protos.ExponentialDecay)
+  ))
+_sym_db.RegisterMessage(ExponentialDecay)
+
+ManualStepping = _reflection.GeneratedProtocolMessageType('ManualStepping', (_message.Message,), dict(
+  DESCRIPTOR = _MANUALSTEPPING,
+  __module__ = 'second.protos.optimizer_pb2'
+  # @@protoc_insertion_point(class_scope:second.protos.ManualStepping)
+  ))
+_sym_db.RegisterMessage(ManualStepping)
 
 
 # @@protoc_insertion_point(module_scope)

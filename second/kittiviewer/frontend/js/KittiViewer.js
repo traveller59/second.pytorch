@@ -14,7 +14,7 @@ var KittiViewer = function (pointCloud, logger, imageCanvas) {
     this.gtBboxes = [];
     this.dtBboxes = [];
     this.pointCloud = pointCloud;
-    this.maxPoints = 150000;
+    this.maxPoints = 500000;
     this.pointVertices = new Float32Array(this.maxPoints * 3);
     this.gtBoxColor = "#00ff00";
     this.dtBoxColor = "#ff0000";
@@ -238,18 +238,20 @@ KittiViewer.prototype = {
                         var points = new Float32Array(points_buf);
                     }
                     var numFeatures = response["num_features"];
-                    var locs = response["locs"];
-                    var dims = response["dims"];
-
-                    var rots = response["rots"];
-                    var labels = response["labels"];
-                    self.gtBboxes = response["bbox"];
-                    self.gtBoxes = boxEdgeWithLabel(dims, locs, rots, 2,
-                        self.gtBoxColor, labels,
-                        self.gtLabelColor);
-                    // var boxes = boxEdge(dims, locs, rots, 2, "rgb(0, 255, 0)");
-                    for (var i = 0; i < self.gtBoxes.length; ++i) {
-                        scene.add(self.gtBoxes[i]);
+                    if ("locs" in response){
+                        var locs = response["locs"];
+                        var dims = response["dims"];
+    
+                        var rots = response["rots"];
+                        var labels = response["labels"];
+                        self.gtBboxes = response["bbox"];
+                        self.gtBoxes = boxEdgeWithLabel(dims, locs, rots, 2,
+                            self.gtBoxColor, labels,
+                            self.gtLabelColor);
+                        // var boxes = boxEdge(dims, locs, rots, 2, "rgb(0, 255, 0)");
+                        for (var i = 0; i < self.gtBoxes.length; ++i) {
+                            scene.add(self.gtBoxes[i]);
+                        }
                     }
                     if (self.drawDet && response.hasOwnProperty("dt_dims")) {
 

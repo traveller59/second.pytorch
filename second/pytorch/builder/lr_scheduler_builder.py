@@ -78,6 +78,14 @@ def _create_learning_rate_scheduler(learning_rate_config, optimizer, total_step)
     config = learning_rate_config.one_cycle
     lr_scheduler = lsf.OneCycle(
       optimizer, total_step, config.lr_max, list(config.moms), config.div_factor, config.pct_start)
+  if learning_rate_type == 'exponential_decay':
+    config = learning_rate_config.exponential_decay
+    lr_scheduler = lsf.ExponentialDecay(
+      optimizer, total_step, config.initial_learning_rate, config.decay_length, config.decay_factor, config.staircase)
+  if learning_rate_type == 'manual_stepping':
+    config = learning_rate_config.manual_stepping
+    lr_scheduler = lsf.ManualStepping(
+      optimizer, total_step, list(config.boundaries), list(config.rates))
 
   if lr_scheduler is None:
     raise ValueError('Learning_rate %s not supported.' % learning_rate_type)

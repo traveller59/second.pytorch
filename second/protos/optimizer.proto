@@ -47,6 +47,8 @@ message LearningRate {
   oneof learning_rate {
     MultiPhase multi_phase = 1;
     OneCycle one_cycle = 2;
+    ExponentialDecay exponential_decay = 3;
+    ManualStepping manual_stepping = 4;
   }
 }
 
@@ -65,4 +67,40 @@ message OneCycle {
   repeated float moms = 2;
   float div_factor = 3;
   float pct_start = 4;
+}
+
+/*
+ManualStepping example:
+initial_learning_rate = 0.001
+decay_length = 0.1
+decay_factor = 0.8
+staircase = True
+detail:
+progress 0%~10%, lr=0.001
+progress 10%~20%, lr=0.001 * 0.8
+progress 20%~30%, lr=0.001 * 0.8 * 0.8
+......
+*/
+
+
+message ExponentialDecay {
+  float initial_learning_rate = 1;
+  float decay_length = 2; // must in range (0, 1)
+  float decay_factor = 3;
+  bool staircase = 4;
+}
+
+/*
+ManualStepping example:
+boundaries = [0.8, 0.9]
+rates = [0.001, 0.002, 0.003]
+detail:
+progress 0%~80%, lr=0.001
+progress 80%~90%, lr=0.002
+progress 90%~100%, lr=0.003
+*/
+
+message ManualStepping {
+  repeated float boundaries = 1; // must in range (0, 1)
+  repeated float rates = 2;
 }

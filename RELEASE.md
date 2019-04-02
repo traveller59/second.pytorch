@@ -20,6 +20,8 @@
 
 3. remove much unused and deprecated code.
 
+4. add two learning rate scheduler: exp decay and manual step
+
 # Release 1.5.1
 
 ## Minor Improvements and Bug fixes
