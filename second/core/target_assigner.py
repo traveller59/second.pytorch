@@ -1,4 +1,5 @@
 import numpy as np
+from collections import OrderedDict
 
 from second.core import box_np_ops, region_similarity
 from second.core.target_ops import create_target_np
@@ -67,11 +68,6 @@ class TargetAssigner:
                   gt_classes=None,
                   gt_names=None):
 
-        if anchors_mask is not None:
-            prune_anchor_fn = lambda _: np.where(anchors_mask)[0]
-        else:
-            prune_anchor_fn = None
-
         def similarity_fn(anchors, gt_boxes):
             anchors_rbv = anchors[:, [0, 1, 3, 4, 6]]
             gt_boxes_rbv = gt_boxes[:, [0, 1, 3, 4, 6]]
@@ -82,11 +78,20 @@ class TargetAssigner:
             return self._box_coder.encode(boxes, anchors)
 
         targets_list = []
+        anchor_start_idx = 0
         for class_name, anchor_dict in anchors_dict.items():
             mask = np.array([c == class_name for c in gt_names],
                             dtype=np.bool_)
+            anchors = anchor_dict["anchors"].reshape(-1, self.box_coder.code_size)
+            num_anchors = anchors.shape[0]
+            anchors_mask_class = anchors_mask[anchor_start_idx:anchor_start_idx+num_anchors]
+            if anchors_mask is not None:
+                prune_anchor_fn = lambda _: np.where(anchors_mask_class)[0]
+            else:
+                prune_anchor_fn = None
+            
             targets = create_target_np(
-                anchor_dict["anchors"].reshape(-1, self.box_coder.code_size),
+                anchors,
                 gt_boxes[mask],
                 similarity_fn,
                 box_encoding_fn,
@@ -98,6 +103,7 @@ class TargetAssigner:
                 rpn_batch_size=self._sample_size,
                 norm_by_num_examples=False,
                 box_code_size=self.box_coder.code_size)
+            anchor_start_idx += num_anchors
             targets_list.append(targets)
             feature_map_size = anchor_dict["anchors"].shape[:3]
         targets_dict = {
@@ -166,6 +172,7 @@ class TargetAssigner:
         ]
         match_list, unmatch_list = [], []
         anchors_dict = {a.class_name: {} for a in self._anchor_generators}
+        anchors_dict = OrderedDict(anchors_dict)
         for anchor_generator, match_thresh, unmatch_thresh in zip(
                 self._anchor_generators, matched_thresholds,
                 unmatched_thresholds):
