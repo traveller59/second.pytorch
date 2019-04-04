@@ -84,8 +84,8 @@ class TargetAssigner:
                             dtype=np.bool_)
             anchors = anchor_dict["anchors"].reshape(-1, self.box_coder.code_size)
             num_anchors = anchors.shape[0]
-            anchors_mask_class = anchors_mask[anchor_start_idx:anchor_start_idx+num_anchors]
             if anchors_mask is not None:
+                anchors_mask_class = anchors_mask[anchor_start_idx:anchor_start_idx+num_anchors]
                 prune_anchor_fn = lambda _: np.where(anchors_mask_class)[0]
             else:
                 prune_anchor_fn = None
@@ -171,8 +171,9 @@ class TargetAssigner:
             a.unmatch_threshold for a in self._anchor_generators
         ]
         match_list, unmatch_list = [], []
-        anchors_dict = {a.class_name: {} for a in self._anchor_generators}
-        anchors_dict = OrderedDict(anchors_dict)
+        anchors_dict = OrderedDict()
+        for a in self._anchor_generators:
+            anchors_dict[a.class_name] = {}
         for anchor_generator, match_thresh, unmatch_thresh in zip(
                 self._anchor_generators, matched_thresholds,
                 unmatched_thresholds):
