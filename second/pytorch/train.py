@@ -232,7 +232,7 @@ def train(config_path,
 
     if train_cfg.steps % train_cfg.steps_per_eval == 0:
         total_loop -= 1
-    fastai_optimizer.zero_grad()
+    amp_optimizer.zero_grad()
     step_times = []
     try:
         for _ in range(total_loop):
@@ -272,8 +272,8 @@ def train(config_path,
                 else:
                     loss.backward()
                 torch.nn.utils.clip_grad_norm_(net.parameters(), 10.0)
-                fastai_optimizer.step()
-                fastai_optimizer.zero_grad()
+                amp_optimizer.step()
+                amp_optimizer.zero_grad()
                 net.update_global_step()
                 net_metrics = net.update_metrics(cls_loss_reduced,
                                                  loc_loss_reduced, cls_preds,

@@ -20,7 +20,6 @@ import torch
 from torch import nn
 from torchplus.train.fastai_optim import OptimWrapper, FastAIMixedOptim
 from functools import partial
-import apex
 
 def children(m: nn.Module):
     "Get children of `m`."
