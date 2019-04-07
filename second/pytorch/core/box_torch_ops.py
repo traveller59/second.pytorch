@@ -7,7 +7,7 @@ from torch import stack as tstack
 
 import torchplus
 from torchplus.tools import torch_to_np_dtype
-from second.core.non_max_suppression.nms_gpu import (nms_gpu, rotate_iou_gpu,
+from second.core.non_max_suppression.nms_gpu import (nms_gpu_cc, rotate_iou_gpu,
                                                        rotate_nms_gpu)
 from second.core.non_max_suppression.nms_cpu import rotate_nms_cc
 
@@ -450,7 +450,7 @@ def nms(bboxes,
     if len(dets_np) == 0:
         keep = np.array([], dtype=np.int64)
     else:
-        ret = np.array(nms_gpu(dets_np, iou_threshold), dtype=np.int64)
+        ret = np.array(nms_gpu_cc(dets_np, iou_threshold), dtype=np.int64)
         keep = ret[:post_max_size]
     if keep.shape[0] == 0:
         return torch.zeros([0]).long().to(bboxes.device)

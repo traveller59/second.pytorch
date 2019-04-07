@@ -5,7 +5,7 @@ ONLY support python 3.6+, pytorch 1.0.0+. Tested in Ubuntu 16.04/18.04/Windows 1
 
 ## News
 
-2019-4-1: SECOND V1.6.0alpha released: New Data API, [NuScenes](https://www.nuscenes.org) support, [PointPillars](https://github.com/nutonomy/second.pytorch) support.
+2019-4-1: SECOND V1.6.0alpha released: New Data API, [NuScenes](https://www.nuscenes.org) support, [PointPillars](https://github.com/nutonomy/second.pytorch) support, fp16 and multi-gpu support.
 
 2019-3-21: SECOND V1.5.1 (minor improvement and bug fix) released! 
 
@@ -73,9 +73,11 @@ pip install numba scikit-image scipy pillow
 
 Follow instructions in [spconv](https://github.com/traveller59/spconv) to install spconv. 
 
+If you want to train with fp16 mixed precision (train faster in RTX series, Titan V/RTX and Tesla V100, but I only have 1080Ti), you need to install [apex](https://github.com/NVIDIA/apex).
+
 If you want to use NuScenes dataset, you need to install [nuscenes-devkit](https://github.com/nutonomy/nuscenes-devkit), I recommend to copy nuscenes in python-sdk to second/.. folder (equalivent to add it to PYTHONPATH) and manually install its dependencies, use pip to install devkit will install many fixed-version library.
 
-### 3. Setup cuda for numba
+### 3. Setup cuda for numba (will be removed in 1.6.0 release)
 
 you need to add following environment variable for numba.cuda, you can add them to ~/.bashrc:
 
@@ -128,12 +130,11 @@ Download NuScenes dataset:
        ├── maps          <-- unused
        └── v1.0-test     <-- metadata
 ```
-Since the dataset is really large, you can download parts of the dataset.
 
 Then run
 ```bash
-python create_data.py nuscenes_data_prep --data_path=NUSCENES_TRAINVAL_DATASET_ROOT --version="v1.0-trainval" --max_sweeps=9
-python create_data.py nuscenes_data_prep --data_path=NUSCENES_TEST_DATASET_ROOT --version="v1.0-test" --max_sweeps=9
+python create_data.py nuscenes_data_prep --data_path=NUSCENES_TRAINVAL_DATASET_ROOT --version="v1.0-trainval" --max_sweeps=10
+python create_data.py nuscenes_data_prep --data_path=NUSCENES_TEST_DATASET_ROOT --version="v1.0-test" --max_sweeps=10
 ```
 
 * Modify config file
@@ -168,9 +169,23 @@ eval_input_reader: {
 
 I recommend to use script.py to train and eval. see script.py for more details.
 
+#### train with single GPU
+
 ```bash
 python ./pytorch/train.py train --config_path=./configs/car.fhd.config --model_dir=/path/to/model_dir
 ```
+
+#### train with multiple GPU (need test, I only have one GPU)
+
+Assume you have 4 GPUs and want to train with 3 GPUs:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,3 python ./pytorch/train.py train --config_path=./configs/car.fhd.config --model_dir=/path/to/model_dir --multi_gpu=True
+```
+
+#### train with fp16 (mixed precision)
+
+Modify config file, set enable_mixed_precision to true.
 
 * Make sure "/path/to/model_dir" doesn't exist if you want to train new model. A new directory will be created if the model_dir doesn't exist, otherwise will read checkpoints in it.
 

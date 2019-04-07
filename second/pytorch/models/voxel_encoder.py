@@ -99,9 +99,6 @@ class VoxelFeatureExtractor(nn.Module):
     def forward(self, features, num_voxels, coors):
         # features: [concated_num_points, num_voxel_size, 3(4)]
         # num_voxels: [concated_num_points]
-        # t = time.time()
-        # torch.cuda.synchronize()
-
         points_mean = features[:, :, :3].sum(
             dim=1, keepdim=True) / num_voxels.type_as(features).view(-1, 1, 1)
         features_relative = features[:, :, :3] - points_mean
@@ -115,9 +112,6 @@ class VoxelFeatureExtractor(nn.Module):
         mask = get_paddings_indicator(num_voxels, voxel_count, axis=0)
         mask = torch.unsqueeze(mask, -1).type_as(features)
         # mask = features.max(dim=2, keepdim=True)[0] != 0
-
-        # torch.cuda.synchronize()
-        # print("vfe prep forward time", time.time() - t)
         x = self.vfe1(features)
         x *= mask
         x = self.vfe2(x)
@@ -133,6 +127,8 @@ class VoxelFeatureExtractor(nn.Module):
 
 
 class VoxelFeatureExtractorV2(nn.Module):
+    """VoxelFeatureExtractor with arbitrary number of VFE. deprecated.
+    """
     def __init__(self,
                  num_input_features=4,
                  use_norm=True,
@@ -194,7 +190,7 @@ class VoxelFeatureExtractorV2(nn.Module):
         return voxelwise
 
 
-class VoxelFeatureExtractorV3(nn.Module):
+class SimpleVoxel(nn.Module):
     def __init__(self,
                  num_input_features=4,
                  use_norm=True,
@@ -203,7 +199,7 @@ class VoxelFeatureExtractorV3(nn.Module):
                  voxel_size=(0.2, 0.2, 4),
                  pc_range=(0, -40, -3, 70.4, 40, 1),
                  name='VoxelFeatureExtractor'):
-        super(VoxelFeatureExtractorV3, self).__init__()
+        super(SimpleVoxel, self).__init__()
         self.name = name
         self.num_input_features = num_input_features
 
@@ -215,7 +211,7 @@ class VoxelFeatureExtractorV3(nn.Module):
         return points_mean.contiguous()
 
 
-class SimpleVoxel(nn.Module):
+class SimpleVoxelRadius(nn.Module):
     """Simple voxel encoder. only keep r, z and reflection feature.
     """
 
@@ -226,9 +222,9 @@ class SimpleVoxel(nn.Module):
                  with_distance=False,
                  voxel_size=(0.2, 0.2, 4),
                  pc_range=(0, -40, -3, 70.4, 40, 1),
-                 name='SimpleVoxel'):
+                 name='SimpleVoxelRadius'):
 
-        super(SimpleVoxel, self).__init__()
+        super(SimpleVoxelRadius, self).__init__()
 
         self.num_input_features = num_input_features
         self.name = name

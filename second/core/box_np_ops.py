@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numba
 import numpy as np
-from spconv.utils import rbbox_iou
+from spconv.utils import rbbox_iou, rbbox_intersection
 
 from second.core.geometry import points_in_convex_polygon_3d_jit
 
@@ -20,6 +20,18 @@ def riou_cc(rbboxes, qrbboxes, standup_thresh=0.0):
     return rbbox_iou(boxes_corners, qboxes_corners, standup_iou,
                      standup_thresh)
 
+def rinter_cc(rbboxes, qrbboxes, standup_thresh=0.0):
+    # less than 50ms when used in second one thread. 10x slower than gpu
+    boxes_corners = center_to_corner_box2d(rbboxes[:, :2], rbboxes[:, 2:4],
+                                           rbboxes[:, 4])
+    boxes_standup = corner_to_standup_nd(boxes_corners)
+    qboxes_corners = center_to_corner_box2d(qrbboxes[:, :2], qrbboxes[:, 2:4],
+                                            qrbboxes[:, 4])
+    qboxes_standup = corner_to_standup_nd(qboxes_corners)
+    # if standup box not overlapped, rbbox not overlapped too.
+    standup_iou = iou_jit(boxes_standup, qboxes_standup, eps=0.0)
+    return rbbox_intersection(boxes_corners, qboxes_corners, standup_iou,
+                     standup_thresh)
 
 def second_box_encode(boxes,
                       anchors,

@@ -20,7 +20,7 @@ import torch
 from torch import nn
 from torchplus.train.fastai_optim import OptimWrapper, FastAIMixedOptim
 from functools import partial
-
+import apex
 
 def children(m: nn.Module):
     "Get children of `m`."
@@ -68,29 +68,25 @@ def build(optimizer_config, net, name=None, mixed=False, loss_scale=512.0):
 
     if optimizer_type == 'adam_optimizer':
         config = optimizer_config.adam_optimizer
-        optimizer_func = partial(
-            torch.optim.Adam, betas=(0.9, 0.99), amsgrad=config.amsgrad)
+        if optimizer_config.fixed_weight_decay:
+            optimizer_func = partial(
+                torch.optim.Adam, betas=(0.9, 0.99), amsgrad=config.amsgrad)
+        else:
+            # regular adam
+            optimizer_func = partial(
+                torch.optim.Adam, amsgrad=config.amsgrad)
+
+
 
     # optimizer = OptimWrapper(optimizer, true_wd=optimizer_config.fixed_weight_decay, wd=config.weight_decay)
-    if mixed:
-        optimizer = FastAIMixedOptim.create(
-            optimizer_func,
-            3e-3,
-            get_layer_groups(net),
-            net,
-            loss_scale=loss_scale,
-            wd=config.weight_decay,
-            true_wd=optimizer_config.fixed_weight_decay,
-            bn_wd=True)
-    else:
-        optimizer = OptimWrapper.create(
-            optimizer_func,
-            3e-3,
-            get_layer_groups(net),
-            wd=config.weight_decay,
-            true_wd=optimizer_config.fixed_weight_decay,
-            bn_wd=True)
-
+    optimizer = OptimWrapper.create(
+        optimizer_func,
+        3e-3,
+        get_layer_groups(net),
+        wd=config.weight_decay,
+        true_wd=optimizer_config.fixed_weight_decay,
+        bn_wd=True)
+    print(hasattr(optimizer, "_amp_stash"), '_amp_stash')
     if optimizer is None:
         raise ValueError('Optimizer %s not supported.' % optimizer_type)
 

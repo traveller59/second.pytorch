@@ -1,9 +1,11 @@
 import json
 import pickle
 import time
+import random
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
+import subprocess
 
 import fire
 import numpy as np
@@ -14,10 +16,27 @@ from second.data import kitti_common as kitti
 from second.data.dataset import Dataset
 from second.utils.eval import get_coco_eval_result, get_official_eval_result
 from second.utils.progress_bar import progress_bar_iter as prog_bar
-
+from second.utils.timer import simple_timer
+import psutil
 
 class NuScenesDataset(Dataset):
-    NumPointFeatures = 4
+    NumPointFeatures = 4 # xyz, timestamp. set 4 to use kitti pretrain
+    NameMapping = {
+        'movable_object.barrier': 'barrier',
+        'vehicle.bicycle': 'bicycle',
+        'vehicle.bus.bendy': 'bus',
+        'vehicle.bus.rigid': 'bus',
+        'vehicle.car': 'car',
+        'vehicle.construction': 'construction_vehicle',
+        'vehicle.motorcycle': 'motorcycle',
+        'human.pedestrian.adult': 'pedestrian',
+        'human.pedestrian.child': 'pedestrian',
+        'human.pedestrian.construction_worker': 'pedestrian',
+        'human.pedestrian.police_officer': 'pedestrian',
+        'movable_object.trafficcone': 'traffic_cone',
+        'vehicle.trailer': 'trailer',
+        'vehicle.truck': 'truck'
+    }
 
     def __init__(self,
                  root_path,
@@ -27,41 +46,17 @@ class NuScenesDataset(Dataset):
                  num_point_features=None):
         self._root_path = Path(root_path)
         with open(info_path, 'rb') as f:
-            self._nusc_infos = pickle.load(f)
-        self._num_point_features = 4
+            data = pickle.load(f)
+        self._nusc_infos = data["infos"]
+        self._metadata = data["metadata"]
         self._class_names = class_names
         self._prep_func = prep_func
-        self._name_mapping = {
-            'human.pedestrian.adult': 'pedestrian',
-            'human.pedestrian.child': 'pedestrian',
-            'human.pedestrian.wheelchair': 'ignore',
-            'human.pedestrian.stroller': 'ignore',
-            'human.pedestrian.personal_mobility': 'ignore',
-            'human.pedestrian.police_officer': 'pedestrian',
-            'human.pedestrian.construction_worker': 'pedestrian',
-            'animal': 'ignore',
-            'vehicle.car': 'car',
-            'vehicle.motorcycle': 'motorcycle',
-            'vehicle.bicycle': 'bicycle',
-            'vehicle.bus.bendy': 'bus',
-            'vehicle.bus.rigid': 'bus',
-            'vehicle.truck': 'truck',
-            'vehicle.construction': 'construction_vehicle',
-            'vehicle.emergency.ambulance': 'ignore',
-            'vehicle.emergency.police': 'ignore',
-            'vehicle.trailer': 'trailer',
-            'movable_object.barrier': 'barrier',
-            'movable_object.trafficcone': 'traffic_cone',
-            'movable_object.pushable_pullable': 'ignore',
-            'movable_object.debris': 'ignore',
-            'static_object.bicycle_rack': 'ignore',
-        }
-        self._kitti_name_mapping = {}
-        for k, v in self._name_mapping.items():
-            if v.lower() in ["car", "pedestrian"
-                             ]:  # we only eval these classes in kitti
-                self._kitti_name_mapping[k] = v
-        self.version = "v1.0-mini"
+        # kitti map: nusc det name -> kitti eval name
+        self._kitti_name_mapping = {
+            "car": "car",
+            "pedestrian": "pedestrian",
+        } # we only eval these classes in kitti
+        self.version = self._metadata["version"]
         self.eval_version = "cvpr_2019"
 
     def __len__(self):
@@ -137,21 +132,24 @@ class NuScenesDataset(Dataset):
         lidar_path = Path(info['lidar_path'])
         points = np.fromfile(
             str(lidar_path), dtype=np.float32, count=-1).reshape([-1,
-                                                                  5])[:, :4]
-        points[:, -1] /= 255
+                                                                5])
+        points[:, 3] /= 255
+        points[:, 4] = 0
         sweep_points_list = [points]
-
+        ts = info["timestamp"] / 1e6
         for sweep in info["sweeps"]:
             points_sweep = np.fromfile(
                 str(sweep["lidar_path"]), dtype=np.float32,
-                count=-1).reshape([-1, 5])[:, :4]
-            points_sweep[:, -1] /= 255
+                count=-1).reshape([-1, 5])
+            sweep_ts = sweep["timestamp"] / 1e6
+            points_sweep[:, 3] /= 255
             points_sweep[:, :3] = points_sweep[:, :3] @ sweep[
-                "sweep2lidar_rotation"]
+                "sweep2lidar_rotation"].T
             points_sweep[:, :3] += sweep["sweep2lidar_translation"]
+            points_sweep[:, 4] = ts - sweep_ts
             sweep_points_list.append(points_sweep)
-        points = np.concatenate(sweep_points_list, axis=0)
-
+        points = np.concatenate(sweep_points_list, axis=0)[:, [0, 1, 2, 4]]
+        
         if read_test_image:
             if Path(info["cam_front_path"]).exists():
                 with open(str(info["cam_front_path"]), 'rb') as f:
@@ -214,8 +212,8 @@ class NuScenesDataset(Dataset):
             names = anno["name"].tolist()
             mapped_names = []
             for n in names:
-                if n in self._name_mapping:
-                    mapped_names.append(self._name_mapping[n])
+                if n in self.NameMapping:
+                    mapped_names.append(self.NameMapping[n])
                 else:
                     mapped_names.append(n)
             anno["name"] = np.array(mapped_names)
@@ -223,15 +221,15 @@ class NuScenesDataset(Dataset):
             names = anno["name"].tolist()
             mapped_names = []
             for n in names:
-                if n in self._name_mapping:
-                    mapped_names.append(self._name_mapping[n])
+                if n in self.NameMapping:
+                    mapped_names.append(self.NameMapping[n])
                 else:
                     mapped_names.append(n)
             anno["name"] = np.array(mapped_names)
         mapped_class_names = []
         for n in self._class_names:
-            if n in self._name_mapping:
-                mapped_class_names.append(self._name_mapping[n])
+            if n in self.NameMapping:
+                mapped_class_names.append(self.NameMapping[n])
             else:
                 mapped_class_names.append(n)
 
@@ -271,21 +269,14 @@ class NuScenesDataset(Dataset):
         if gt_annos is None:
             return None
         nusc_annos = {}
-        from nuscenes.nuscenes import NuScenes
-        nusc = NuScenes(
-            version=version, dataroot=str(self._root_path), verbose=False)
-        mapped_class_names = []
-        for n in self._class_names:
-            if n in self._name_mapping:
-                mapped_class_names.append(self._name_mapping[n])
-            else:
-                mapped_class_names.append(n)
-
+        mapped_class_names = self._class_names
+        token2info = {}
+        for info in self._nusc_infos:
+            token2info[info["token"]] = info
         for det in detections:
             annos = []
             boxes = _second_det_to_nusc_box(det)
-            boxes = _lidar_nusc_box_to_global(nusc, boxes,
-                                              det["metadata"]["token"])
+            boxes = _lidar_nusc_box_to_global(token2info[det["metadata"]["token"]], boxes)
             for i, box in enumerate(boxes):
                 name = mapped_class_names[box.label]
                 nusc_anno = {
@@ -303,17 +294,14 @@ class NuScenesDataset(Dataset):
         res_path = str(Path(output_dir) / "results_nusc.json")
         with open(res_path, "w") as f:
             json.dump(nusc_annos, f)
-        del nusc  # release memory
-        from nuscenes.eval.detection.evaluate import main as eval_main
-        eval_main(
-            res_path,
-            output_dir,
-            eval_set=eval_set_map[version],
-            dataroot=str(self._root_path),
-            version=version,
-            verbose=False,
-            config_name=self.eval_version,
-            plot_examples=0)
+        eval_main_file = Path(__file__).resolve().parent / "nusc_eval.py"
+        # why add \"{}\"? to support path with spaces.
+        cmd = f"python {str(eval_main_file)} --root_path=\"{str(self._root_path)}\""
+        cmd += f" --version={self.version} --eval_version={self.eval_version}"
+        cmd += f" --res_path=\"{res_path}\" --eval_set={eval_set_map[self.version]}"
+        cmd += f" --output_dir=\"{output_dir}\""
+        # use subprocess can release all nusc memory after evaluation
+        subprocess.check_output(cmd, shell=True)
         with open(Path(output_dir) / "metrics.json", "r") as f:
             metrics = json.load(f)
         detail = {}
@@ -378,26 +366,16 @@ def _second_det_to_nusc_box(detection):
     return box_list
 
 
-def _lidar_nusc_box_to_global(nusc, boxes, sample_token):
+def _lidar_nusc_box_to_global(info, boxes):
     import pyquaternion
-    s_record = nusc.get('sample', sample_token)
-    sample_data_token = s_record["data"]["LIDAR_TOP"]
-    sd_record = nusc.get('sample_data', sample_data_token)
-    cs_record = nusc.get('calibrated_sensor',
-                         sd_record['calibrated_sensor_token'])
-    sensor_record = nusc.get('sensor', cs_record['sensor_token'])
-    pose_record = nusc.get('ego_pose', sd_record['ego_pose_token'])
-
-    data_path = nusc.get_sample_data_path(sample_data_token)
     box_list = []
     for box in boxes:
         # Move box to ego vehicle coord system
-        box.rotate(pyquaternion.Quaternion(cs_record['rotation']))
-
-        box.translate(np.array(cs_record['translation']))
+        box.rotate(pyquaternion.Quaternion(info['lidar2ego_rotation']))
+        box.translate(np.array(info['lidar2ego_translation']))
         # Move box to global coord system
-        box.rotate(pyquaternion.Quaternion(pose_record['rotation']))
-        box.translate(np.array(pose_record['translation']))
+        box.rotate(pyquaternion.Quaternion(info['ego2global_rotation']))
+        box.translate(np.array(info['ego2global_translation']))
         box_list.append(box)
     return box_list
 
@@ -434,7 +412,7 @@ def _fill_trainval_infos(nusc,
                          train_scenes,
                          val_scenes,
                          test=False,
-                         max_sweeps=9):
+                         max_sweeps=10):
     train_nusc_infos = []
     val_nusc_infos = []
     from pyquaternion import Quaternion
@@ -445,10 +423,9 @@ def _fill_trainval_infos(nusc,
         cs_record = nusc.get('calibrated_sensor',
                              sd_rec['calibrated_sensor_token'])
         pose_record = nusc.get('ego_pose', sd_rec['ego_pose_token'])
-
         lidar_path, boxes, _ = nusc.get_sample_data(lidar_token)
         cam_path, _, cam_intrinsic = nusc.get_sample_data(cam_front_token)
-        # if Path(lidar_path).exists():
+        assert Path(lidar_path).exists(), "you must download all trainval data."
         info = {
             "lidar_path": lidar_path,
             "cam_front_path": cam_path,
@@ -500,19 +477,22 @@ def _fill_trainval_infos(nusc,
                     np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(l2e_r_mat).T)
                 T -= e2g_t @ (np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(
                     l2e_r_mat).T) + l2e_t @ np.linalg.inv(l2e_r_mat).T
-                sweep["sweep2lidar_rotation"] = R
+                sweep["sweep2lidar_rotation"] = R.T  # points @ R.T + T
                 sweep["sweep2lidar_translation"] = T
                 sweeps.append(sweep)
             else:
                 break
         info["sweeps"] = sweeps
-
         if not test:
             locs = np.array([b.center for b in boxes]).reshape(-1, 3)
             dims = np.array([b.wlh for b in boxes]).reshape(-1, 3)
             rots = np.array([b.orientation.yaw_pitch_roll[0]
                              for b in boxes]).reshape(-1, 1)
-            names = np.array([b.name for b in boxes])
+            names = [b.name for b in boxes]
+            for i in range(len(names)):
+                if names[i] in NuScenesDataset.NameMapping:
+                    names[i] = NuScenesDataset.NameMapping[names[i]]
+            names = np.array(names)
             gt_boxes = np.concatenate([locs, dims, -rots - np.pi / 2], axis=1)
             info["gt_boxes"] = gt_boxes
             info["gt_names"] = names
@@ -522,8 +502,7 @@ def _fill_trainval_infos(nusc,
             val_nusc_infos.append(info)
     return train_nusc_infos, val_nusc_infos
 
-
-def create_nuscenes_infos(root_path, version="v1.0-trainval", max_sweeps=9):
+def create_nuscenes_infos(root_path, version="v1.0-trainval", max_sweeps=10):
     from nuscenes.nuscenes import NuScenes
     nusc = NuScenes(version=version, dataroot=root_path, verbose=True)
     from nuscenes.utils import splits
@@ -563,31 +542,64 @@ def create_nuscenes_infos(root_path, version="v1.0-trainval", max_sweeps=9):
             f"train scene: {len(train_scenes)}, val scene: {len(val_scenes)}")
     train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
         nusc, train_scenes, val_scenes, test, max_sweeps=max_sweeps)
+    metadata = {
+        "version": version,
+    }
     if test:
         print(f"test sample: {len(train_nusc_infos)}")
+        data = {
+            "infos": train_nusc_infos,
+            "metadata": metadata,
+        }
         with open(root_path / "infos_test.pkl", 'wb') as f:
-            pickle.dump(train_nusc_infos, f)
+            pickle.dump(data, f)
     else:
         print(
             f"train sample: {len(train_nusc_infos)}, val sample: {len(val_nusc_infos)}"
         )
+        data = {
+            "infos": train_nusc_infos,
+            "metadata": metadata,
+        }
         with open(root_path / "infos_train.pkl", 'wb') as f:
-            pickle.dump(train_nusc_infos, f)
+            pickle.dump(data, f)
+        data["infos"] = val_nusc_infos
         with open(root_path / "infos_val.pkl", 'wb') as f:
-            pickle.dump(val_nusc_infos, f)
+            pickle.dump(data, f)
 
 
-def get_box_mean(info_path, class_name="vehicle.car"):
+def get_box_mean(info_path, class_name="vehicle.car", eval_version="cvpr_2019"):
     with open(info_path, 'rb') as f:
         nusc_infos = pickle.load(f)
+    from nuscenes.eval.detection.config import eval_detection_configs
+    cls_range_map = eval_detection_configs[eval_version]["class_range"]
+    gt_annos = []
 
     gt_boxes_list = []
     for info in nusc_infos:
+        gt_boxes = info["gt_boxes"]
+        gt_names = info["gt_names"]
         mask = np.array([s == class_name for s in info["gt_names"]],
                         dtype=np.bool_)
-        gt_boxes_list.append(info["gt_boxes"][mask].reshape(-1, 7))
+        gt_names = gt_names[mask]
+        gt_boxes = gt_boxes[mask]
+        det_range = np.array([cls_range_map[n] for n in gt_names])
+        det_range = det_range[..., np.newaxis] @ np.array([[-1, -1, 1, 1]])
+        mask = (gt_boxes[:, :2] >= det_range[:, :2]).all(1)
+        mask &= (gt_boxes[:, :2] <= det_range[:, 2:]).all(1)
+
+        gt_boxes_list.append(gt_boxes[mask].reshape(-1, 7))
     gt_boxes_list = np.concatenate(gt_boxes_list, axis=0)
     print(gt_boxes_list.mean(0))
+
+def get_all_box_mean(info_path):
+    det_names = set()
+    for k, v in NuScenesDataset.NameMapping.items():
+        if v not in det_names:
+            det_names.add(v)
+    for k in det_names:
+        print(f"{k}: ")
+        get_box_mean(info_path, k)
 
 
 if __name__ == "__main__":

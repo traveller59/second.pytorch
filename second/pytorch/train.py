@@ -1,13 +1,12 @@
 import copy
 import json
 import os
-import pathlib
+from pathlib import Path
 import pickle
 import shutil
 import time
 
 import fire
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from google.protobuf import text_format
@@ -16,14 +15,14 @@ import second.data.kitti_common as kitti
 import torchplus
 from second.builder import target_assigner_builder, voxel_builder
 from second.core import box_np_ops
-from second.data.preprocess import merge_second_batch
+from second.data.preprocess import merge_second_batch, merge_second_batch_multigpu
 from second.protos import pipeline_pb2
 from second.pytorch.builder import (box_coder_builder, input_reader_builder,
                                     lr_scheduler_builder, optimizer_builder,
                                     second_builder)
 from second.utils.log_tool import SimpleModelLog
 from second.utils.progress_bar import ProgressBar
-
+import psutil
 
 def example_convert_to_torch(example, dtype=torch.float32,
                              device=None) -> dict:
@@ -78,14 +77,19 @@ def train(config_path,
           create_folder=False,
           display_step=50,
           summary_step=5,
+          pretrained_path=None,
+          multi_gpu=False,
+          num_gpu=None,
           resume=False):
     """train a VoxelNet model specified by a config file.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    model_dir = str(Path(model_dir).resolve())
     if create_folder:
-        if pathlib.Path(model_dir).exists():
+        if Path(model_dir).exists():
             model_dir = torchplus.train.create_folder(model_dir)
-    model_dir = pathlib.Path(model_dir)
+    model_dir = Path(model_dir)
     if not resume and model_dir.exists():
         raise ValueError("model dir exists and you don't specify resume.")
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -112,49 +116,69 @@ def train(config_path,
     train_cfg = config.train_config
 
     net = build_network(model_cfg).to(device)
-    if train_cfg.enable_mixed_precision:
-        net.half()
-        net.metrics_to_float()
-        net.convert_norm_to_float(net)
+    # if train_cfg.enable_mixed_precision:
+    #     net.half()
+    #     net.metrics_to_float()
+    #     net.convert_norm_to_float(net)
     target_assigner = net.target_assigner
     voxel_generator = net.voxel_generator
     class_names = target_assigner.classes
 
-    # net_train = torch.nn.DataParallel(net).cuda()
+    
     print("num_trainable parameters:", len(list(net.parameters())))
     # for n, p in net.named_parameters():
     #     print(n, p.shape)
-    ######################
-    # BUILD OPTIMIZER
-    ######################
     # we need global_step to create lr_scheduler, so restore net first.
     torchplus.train.try_restore_latest_checkpoints(model_dir, [net])
+    if pretrained_path is not None:
+        net.load_state_dict(torch.load(pretrained_path))
+        net.clear_global_step()
+        net.clear_metrics()
+    if multi_gpu:
+        net_parallel = torch.nn.DataParallel(net)
+    else:
+        net_parallel = net
     gstep = net.get_global_step() - 1
     optimizer_cfg = train_cfg.optimizer
     loss_scale = train_cfg.loss_scale_factor
-    mixed_optimizer = optimizer_builder.build(
+    fastai_optimizer = optimizer_builder.build(
         optimizer_cfg,
         net,
-        mixed=train_cfg.enable_mixed_precision,
+        mixed=False,
         loss_scale=loss_scale)
-    optimizer = mixed_optimizer
-    center_limit_range = model_cfg.post_center_limit_range
-    """
     if train_cfg.enable_mixed_precision:
-        mixed_optimizer = torchplus.train.MixedPrecisionWrapper(
-            optimizer, loss_scale)
+        max_num_voxels = input_cfg.preprocess.max_number_of_voxels * input_cfg.batch_size
+        assert max_num_voxels < 65535, "spconv fp16 training only support this"
+        from apex import amp
+        net, amp_optimizer = amp.initialize(net, fastai_optimizer,
+                                        opt_level="O2",
+                                        keep_batchnorm_fp32=True,
+                                        loss_scale=loss_scale
+                                        )
+        net.metrics_to_float()
     else:
-        mixed_optimizer = optimizer
-    """
-    # must restore optimizer AFTER using MixedPrecisionWrapper
+        amp_optimizer = fastai_optimizer
+    center_limit_range = model_cfg.post_center_limit_range
     torchplus.train.try_restore_latest_checkpoints(model_dir,
-                                                   [mixed_optimizer])
-    lr_scheduler = lr_scheduler_builder.build(optimizer_cfg, optimizer,
+                                                   [fastai_optimizer])
+    lr_scheduler = lr_scheduler_builder.build(optimizer_cfg, amp_optimizer,
                                               train_cfg.steps)
     if train_cfg.enable_mixed_precision:
         float_dtype = torch.float16
     else:
         float_dtype = torch.float32
+
+    if multi_gpu:
+        if num_gpu is None:
+            num_gpu = torch.cuda.device_count()
+        else:
+            assert num_gpu < torch.cuda.device_count()
+        print(f"MULTI-GPU: use {num_gpu} gpu")
+        collate_fn = merge_second_batch_multigpu
+    else:
+        collate_fn = merge_second_batch
+        num_gpu = 1
+
     ######################
     # PREPARE INPUT
     ######################
@@ -163,7 +187,8 @@ def train(config_path,
         model_cfg,
         training=True,
         voxel_generator=voxel_generator,
-        target_assigner=target_assigner)
+        target_assigner=target_assigner,
+        multi_gpu=multi_gpu)
     eval_dataset = input_reader_builder.build(
         eval_input_cfg,
         model_cfg,
@@ -173,15 +198,15 @@ def train(config_path,
 
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        batch_size=input_cfg.batch_size,
+        batch_size=input_cfg.batch_size * num_gpu,
         shuffle=True,
         num_workers=input_cfg.preprocess.num_workers,
         pin_memory=False,
-        collate_fn=merge_second_batch,
+        collate_fn=collate_fn,
         worker_init_fn=_worker_init_fn)
     eval_dataloader = torch.utils.data.DataLoader(
         eval_dataset,
-        batch_size=eval_input_cfg.batch_size,
+        batch_size=eval_input_cfg.batch_size, # only support multi-gpu train
         shuffle=False,
         num_workers=eval_input_cfg.preprocess.num_workers,
         pin_memory=False,
@@ -207,7 +232,8 @@ def train(config_path,
 
     if train_cfg.steps % train_cfg.steps_per_eval == 0:
         total_loop -= 1
-    mixed_optimizer.zero_grad()
+    fastai_optimizer.zero_grad()
+    step_times = []
     try:
         for _ in range(total_loop):
             if total_step_elapsed + train_cfg.steps_per_eval > train_cfg.steps:
@@ -228,9 +254,7 @@ def train(config_path,
 
                 batch_size = example["anchors"].shape[0]
 
-                ret_dict = net(example_torch)
-
-                # box_preds = ret_dict["box_preds"]
+                ret_dict = net_parallel(example_torch)
                 cls_preds = ret_dict["cls_preds"]
                 loss = ret_dict["loss"].mean()
                 cls_loss_reduced = ret_dict["cls_loss_reduced"].mean()
@@ -243,17 +267,20 @@ def train(config_path,
                 cared = ret_dict["cared"]
                 labels = example_torch["labels"]
                 if train_cfg.enable_mixed_precision:
-                    loss *= loss_scale
-                loss.backward()
+                    with amp.scale_loss(loss, amp_optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    loss.backward()
                 torch.nn.utils.clip_grad_norm_(net.parameters(), 10.0)
-                mixed_optimizer.step()
-                mixed_optimizer.zero_grad()
+                fastai_optimizer.step()
+                fastai_optimizer.zero_grad()
                 net.update_global_step()
                 net_metrics = net.update_metrics(cls_loss_reduced,
                                                  loc_loss_reduced, cls_preds,
                                                  labels, cared)
 
                 step_time = (time.time() - t)
+                step_times.append(step_time)
                 t = time.time()
                 metrics = {}
                 num_pos = int((labels > 0)[0].float().sum().cpu().numpy())
@@ -270,8 +297,9 @@ def train(config_path,
                     ]
                     metrics["runtime"] = {
                         "step": global_step,
-                        "steptime": step_time,
+                        "steptime": np.mean(step_times),
                     }
+                    step_times = []
                     metrics.update(net_metrics)
                     metrics["loss"]["loc_elem"] = loc_loss_elem
                     metrics["loss"]["cls_pos_rt"] = float(
@@ -287,18 +315,20 @@ def train(config_path,
                         "num_pos": int(num_pos),
                         "num_neg": int(num_neg),
                         "num_anchors": int(num_anchors),
-                        "lr": float(optimizer.lr),
+                        "lr": float(amp_optimizer.lr),
+                        "mem_usage": psutil.virtual_memory().percent,
                     }
                     # metrics["lr"] = float(
-                    #     mixed_optimizer.param_groups[0]['lr'])
+                    #     fastai_optimizer.param_groups[0]['lr'])
                     model_logging.log_metrics(metrics, global_step)
+
                 ckpt_elasped_time = time.time() - ckpt_start_time
                 if ckpt_elasped_time > train_cfg.save_checkpoints_secs:
-                    torchplus.train.save_models(model_dir, [net, optimizer],
+                    torchplus.train.save_models(model_dir, [net, amp_optimizer],
                                                 net.get_global_step())
                     ckpt_start_time = time.time()
             total_step_elapsed += steps
-            torchplus.train.save_models(model_dir, [net, optimizer],
+            torchplus.train.save_models(model_dir, [net, amp_optimizer],
                                         net.get_global_step())
             net.eval()
             result_path_step = result_path / f"step_{net.get_global_step()}"
@@ -334,13 +364,13 @@ def train(config_path,
                 pickle.dump(detections, f)
             net.train()
     except Exception as e:
-        torchplus.train.save_models(model_dir, [net, optimizer],
+        torchplus.train.save_models(model_dir, [net, amp_optimizer],
                                     net.get_global_step())
         raise e
     finally:
         model_logging.close()
     # save model before exit
-    torchplus.train.save_models(model_dir, [net, optimizer],
+    torchplus.train.save_models(model_dir, [net, amp_optimizer],
                                 net.get_global_step())
 
 
@@ -353,13 +383,14 @@ def evaluate(config_path,
     """Don't support pickle_result anymore. if you want to generate kitti label file,
     please use kitti_anno_to_label_file in second.data.kitti_dataset.
     """
+    model_dir = str(Path(model_dir).resolve())
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     result_name = 'eval_results'
     if result_path is None:
-        model_dir = pathlib.Path(model_dir)
+        model_dir = Path(model_dir)
         result_path = model_dir / result_name
     else:
-        result_path = pathlib.Path(result_path)
+        result_path = Path(result_path)
     if isinstance(config_path, str):
         # directly provide a config object. this usually used
         # when you want to eval with several different parameters in
@@ -394,7 +425,7 @@ def evaluate(config_path,
         torchplus.train.try_restore_latest_checkpoints(model_dir, [net])
     else:
         torchplus.train.restore(ckpt_path, net)
-
+    # net.middle_feature_extractor.fused_middle_conv = net.middle_feature_extractor.middle_conv.fused()
     batch_size = batch_size or input_cfg.batch_size
     eval_dataset = input_reader_builder.build(
         input_cfg,
@@ -406,7 +437,7 @@ def evaluate(config_path,
         eval_dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=0,  # input_cfg.num_workers,
+        num_workers=input_cfg.preprocess.num_workers,
         pin_memory=False,
         collate_fn=merge_second_batch)
 
@@ -452,19 +483,12 @@ def evaluate(config_path,
         print(f"avg {name} time = {val * 1000:.3f} ms")
     with open(result_path_step / "result.pkl", 'wb') as f:
         pickle.dump(detections, f)
-    """
-    with open(result_path_step / "result.pkl", 'rb') as f:
-        detections = pickle.load(f)
-    print(detections[0].keys())
-    """
     result_dict = eval_dataset.dataset.evaluation(detections,
                                                   str(result_path_step))
     if result_dict is not None:
         for k, v in result_dict["results"].items():
             print("Evaluation {}".format(k))
             print(v)
-        # metric dict: class -> metric type -> diff -> overlap -> recall, prec, ...
-    return detections
 
 
 def save_config(config_path, save_path):

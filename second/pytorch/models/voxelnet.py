@@ -118,8 +118,8 @@ class VoxelNet(nn.Module):
         vfe_class_dict = {
             "VoxelFeatureExtractor": voxel_encoder.VoxelFeatureExtractor,
             "VoxelFeatureExtractorV2": voxel_encoder.VoxelFeatureExtractorV2,
-            "VoxelFeatureExtractorV3": voxel_encoder.VoxelFeatureExtractorV3,
             "SimpleVoxel": voxel_encoder.SimpleVoxel,
+            "SimpleVoxelRadius": voxel_encoder.SimpleVoxelRadius,
             "PillarFeatureNet": pointpillars.PillarFeatureNet,
         }
         vfe_class = vfe_class_dict[vfe_class_name]
@@ -146,6 +146,7 @@ class VoxelNet(nn.Module):
             "SpMiddle2KPeople": middle.SpMiddle2KPeople,
             "SpMiddleHDLite": middle.SpMiddleHDLite,
             "PointPillarsScatter": pointpillars.PointPillarsScatter,
+            "SpMiddleFHDLiteNoNorm": middle.SpMiddleFHDLiteNoNorm,
         }
         mid_class = mid_class_dict[middle_class_name]
         self.middle_feature_extractor = mid_class(
@@ -233,12 +234,27 @@ class VoxelNet(nn.Module):
     def get_global_step(self):
         return int(self.global_step.cpu().numpy()[0])
 
+    def clear_global_step(self):
+        self.global_step.zero_()
+
     def forward(self, example):
         """module's forward should always accept dict and return loss.
         """
         voxels = example["voxels"]
         num_points = example["num_points"]
         coors = example["coordinates"]
+        if len(num_points.shape) == 2: # multi-gpu
+            num_voxel_per_batch = example["num_voxels"].reshape(-1)
+            voxel_list = []
+            num_points_list = []
+            coors_list = []
+            for i, num_voxel in enumerate(num_voxel_per_batch):
+                voxel_list.append(voxels[i, :num_voxel])
+                num_points_list.append(num_points[i, :num_voxel])
+                coors_list.append(coors[i, :num_voxel])
+            voxels = torch.cat(voxel_list, dim=0)
+            num_points = torch.cat(num_points_list, dim=0)
+            coors = torch.cat(coors_list, dim=0)
         batch_anchors = example["anchors"]
         batch_size_dev = batch_anchors.shape[0]
         t = time.time()
@@ -373,7 +389,7 @@ class VoxelNet(nn.Module):
             post_center_range = torch.tensor(
                 self._post_center_range,
                 dtype=batch_box_preds.dtype,
-                device=batch_box_preds.device)
+                device=batch_box_preds.device).float()
         for box_preds, cls_preds, dir_preds, a_mask, meta in zip(
                 batch_box_preds, batch_cls_preds, batch_dir_preds,
                 batch_anchors_mask, meta_list):

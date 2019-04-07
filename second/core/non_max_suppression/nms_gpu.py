@@ -7,6 +7,17 @@ from numba import cuda
 
 from spconv.utils import non_max_suppression
 
+def nms_gpu_cc(dets, nms_overlap_thresh, device_id=0):
+    boxes_num = dets.shape[0]
+    keep = np.zeros(boxes_num, dtype=np.int32)
+    scores = dets[:, 4]
+    order = scores.argsort()[::-1].astype(np.int32)
+    sorted_dets = dets[order, :]
+    num_out = non_max_suppression(sorted_dets, keep, nms_overlap_thresh,
+                                  device_id)
+    keep = keep[:num_out]
+    return list(order[keep])
+
 @cuda.jit('(float32[:], float32[:])', device=True, inline=True)
 def iou_device(a, b):
     left = max(a[0], b[0])
@@ -149,18 +160,6 @@ def nms_gpu(dets, nms_overlap_thresh, device_id=0):
     # stream.synchronize()
     num_out = nms_postprocess(keep_out, mask_host, boxes_num)
     keep = keep_out[:num_out]
-    return list(order[keep])
-
-
-def nms_gpu_cc(dets, nms_overlap_thresh, device_id=0):
-    boxes_num = dets.shape[0]
-    keep = np.zeros(boxes_num, dtype=np.int32)
-    scores = dets[:, 4]
-    order = scores.argsort()[::-1].astype(np.int32)
-    sorted_dets = dets[order, :]
-    num_out = non_max_suppression(sorted_dets, keep, nms_overlap_thresh,
-                                  device_id)
-    keep = keep[:num_out]
     return list(order[keep])
 
 
@@ -604,7 +603,7 @@ def rotate_iou_kernel_eval(N,
 
 
 def rotate_iou_gpu_eval(boxes, query_boxes, criterion=-1, device_id=0):
-    """rotated box iou running in gpu. 500x faster than cpu version
+    """rotated box iou running in gpu. 8x faster than cpu version
     (take 5ms in one example with numba.cuda code).
     convert from [this project](
         https://github.com/hongzhenwang/RRPN-revise/tree/master/lib/rotation).

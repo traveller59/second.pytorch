@@ -50,7 +50,8 @@ def build(input_reader_config,
           model_config,
           training,
           voxel_generator,
-          target_assigner=None) -> DatasetWrapper:
+          target_assigner=None,
+          multi_gpu=False) -> DatasetWrapper:
     """Builds a tensor dictionary based on the InputReader config.
 
     Args:
@@ -66,7 +67,12 @@ def build(input_reader_config,
     if not isinstance(input_reader_config, input_reader_pb2.InputReader):
         raise ValueError('input_reader_config not of type '
                          'input_reader_pb2.InputReader.')
-    dataset = dataset_builder.build(input_reader_config, model_config,
-                                    training, voxel_generator, target_assigner)
+    dataset = dataset_builder.build(
+        input_reader_config,
+        model_config,
+        training,
+        voxel_generator,
+        target_assigner,
+        multi_gpu=multi_gpu)
     dataset = DatasetWrapper(dataset)
     return dataset

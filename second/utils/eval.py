@@ -119,11 +119,8 @@ def image_box_overlap(boxes, query_boxes, criterion=-1):
     return overlaps
 
 
-def bev_box_overlap(boxes, qboxes, criterion=-1, stable=False):
-    if stable:
-        riou = box_np_ops.riou_cc(boxes, qboxes)
-    else:
-        riou = rotate_iou_gpu_eval(boxes, qboxes, criterion)
+def bev_box_overlap(boxes, qboxes, criterion=-1, stable=True):
+    riou = box_np_ops.riou_cc(boxes, qboxes)
     return riou
 
 
@@ -165,14 +162,14 @@ def box3d_overlap_kernel(boxes,
                 else:
                     rinc[i, j] = 0.0
 
-
 def box3d_overlap(boxes, qboxes, criterion=-1, z_axis=1, z_center=1.0):
     """kitti camera format z_axis=1.
     """
     bev_axes = list(range(7))
     bev_axes.pop(z_axis + 3)
     bev_axes.pop(z_axis)
-    rinc = rotate_iou_gpu_eval(boxes[:, bev_axes], qboxes[:, bev_axes], 2)
+    rinc = box_np_ops.rinter_cc(boxes[:, bev_axes], qboxes[:, bev_axes])
+    # rinc = rotate_iou_gpu_eval(boxes[:, bev_axes], qboxes[:, bev_axes], 2)
     box3d_overlap_kernel(boxes, qboxes, rinc, criterion, z_axis, z_center)
     return rinc
 

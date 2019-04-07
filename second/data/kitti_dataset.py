@@ -26,17 +26,12 @@ class KittiDataset(Dataset):
             infos = pickle.load(f)
         self._root_path = Path(root_path)
         self._kitti_infos = infos
-        self._num_point_features = 4
         print("remain number of infos:", len(self._kitti_infos))
         self._class_names = class_names
         self._prep_func = prep_func
 
     def __len__(self):
         return len(self._kitti_infos)
-
-    @property
-    def num_point_features(self):
-        return self._num_point_features
 
     @property
     def ground_truth_annotations(self):
@@ -192,11 +187,11 @@ class KittiDataset(Dataset):
             velo_path = Path(self._root_path) / pc_info['velodyne_path']
         velo_reduced_path = velo_path.parent.parent / (
             velo_path.parent.stem + '_reduced') / velo_path.name
-        if velo_reduced_path.exists():
-            velo_path = velo_reduced_path
+        # if velo_reduced_path.exists():
+        velo_path = velo_reduced_path
         points = np.fromfile(
             str(velo_path), dtype=np.float32,
-            count=-1).reshape([-1, self._num_point_features])
+            count=-1).reshape([-1, self.NumPointFeatures])
         res["lidar"]["points"] = points
         image_info = info["image"]
         image_path = image_info['image_path']
@@ -207,7 +202,7 @@ class KittiDataset(Dataset):
             res["cam"] = {
                 "type": "camera",
                 "data": image_str,
-                "datatype": "png",
+                "datatype": image_path.suffix[1:],
             }
         calib = info["calib"]
         calib_dict = {

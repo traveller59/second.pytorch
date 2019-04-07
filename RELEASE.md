@@ -12,6 +12,8 @@
 
 4. Full Tensorboard support.
 
+5. FP16 and multi-gpu (need test, I only have one gpu) support.
+
 ## Minor Improvements and Bug fixes
 
 1. Move all data-specific functions to their corresponding dataset file.

@@ -106,8 +106,9 @@ def get_pointcloud():
         rots = np.concatenate([np.zeros([gt_boxes.shape[0], 2], dtype=np.float32), -gt_boxes[:, 6:7]], axis=1)
         response["rots"] = rots.tolist()
         response["labels"] = annos["names"].tolist()
-    response["num_features"] = sensor_data["lidar"]["points"].shape[1]
-    points = sensor_data["lidar"]["points"]
+    # response["num_features"] = sensor_data["lidar"]["points"].shape[1]
+    response["num_features"] = 3
+    points = sensor_data["lidar"]["points"][:, :3]
     if enable_int16:
         int16_factor = instance["int16_factor"]
         points *= int16_factor

@@ -4,7 +4,7 @@ import time
 from collections import defaultdict
 from functools import partial
 
-import cv2
+# import cv2
 import numpy as np
 from skimage import io as imgio
 
@@ -13,7 +13,7 @@ from second.core import preprocess as prep
 from second.core.geometry import points_in_convex_polygon_3d_jit
 from second.data import kitti_common as kitti
 from second.utils import simplevis
-
+from second.utils.timer import simple_timer
 
 def merge_second_batch(batch_list):
     example_merged = defaultdict(list)
@@ -21,8 +21,6 @@ def merge_second_batch(batch_list):
         for k, v in example.items():
             example_merged[k].append(v)
     ret = {}
-    voxel_nums_list = example_merged["num_voxels"]
-    example_merged.pop("num_voxels")
     for key, elems in example_merged.items():
         if key in [
                 'voxels', 'num_points', 'num_gt', 'gt_boxes', 'voxel_labels'
@@ -47,6 +45,36 @@ def merge_second_batch(batch_list):
                     coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
                 coors.append(coor_pad)
             ret[key] = np.concatenate(coors, axis=0)
+        else:
+            ret[key] = np.stack(elems, axis=0)
+    return ret
+
+def merge_second_batch_multigpu(batch_list):
+    example_merged = defaultdict(list)
+    for example in batch_list:
+        for k, v in example.items():
+            example_merged[k].append(v)
+    ret = {}
+    for key, elems in example_merged.items():
+        if key == 'metadata':
+            ret[key] = elems
+        elif key == "calib":
+            ret[key] = {}
+            for elem in elems:
+                for k1, v1 in elem.items():
+                    if k1 not in ret[key]:
+                        ret[key][k1] = [v1]
+                    else:
+                        ret[key][k1].append(v1)
+            for k1, v1 in ret[key].items():
+                ret[key][k1] = np.stack(v1, axis=0)
+        elif key == 'coordinates':
+            coors = []
+            for i, coor in enumerate(elems):
+                coor_pad = np.pad(
+                    coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
+                coors.append(coor_pad)
+            ret[key] = np.stack(coors, axis=0)
         else:
             ret[key] = np.stack(elems, axis=0)
     return ret
@@ -88,6 +116,7 @@ def prep_pointcloud(input_dict,
                     reference_detections=None,
                     out_size_factor=2,
                     use_group_id=False,
+                    multi_gpu=False,
                     out_dtype=np.float32):
     """convert point cloud to voxels, create targets if ground truths 
     exists.
@@ -236,7 +265,6 @@ def prep_pointcloud(input_dict,
         # bev_map = simplevis.nuscene_vis(points, boxes_lidar)
         # cv2.imshow('post-noise', bev_map)
         # cv2.waitKey(0)
-
     if shuffle_points:
         # shuffle is a little slow.
         np.random.shuffle(points)
@@ -246,14 +274,19 @@ def prep_pointcloud(input_dict,
     pc_range = voxel_generator.point_cloud_range
     grid_size = voxel_generator.grid_size
     # [352, 400]
-
-    voxels, coordinates, num_points = voxel_generator.generate(
-        points, max_voxels)
+    if not multi_gpu:
+        voxels, coordinates, num_points = voxel_generator.generate(
+            points, max_voxels)
+        num_voxels = np.array([voxels.shape[0]], dtype=np.int64)
+    else:
+        voxels, coordinates, num_points, num_voxels = voxel_generator.generate_multi_gpu(
+            points, max_voxels)
+        num_voxels = np.array([num_voxels], dtype=np.int64)
     example = {
         'voxels': voxels,
         'num_points': num_points,
         'coordinates': coordinates,
-        "num_voxels": np.array([voxels.shape[0]], dtype=np.int64)
+        "num_voxels": num_voxels,
     }
     if calib is not None:
         example["calib"] = calib

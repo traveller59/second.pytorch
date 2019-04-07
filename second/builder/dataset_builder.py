@@ -35,7 +35,8 @@ def build(input_reader_config,
           model_config,
           training,
           voxel_generator,
-          target_assigner):
+          target_assigner,
+          multi_gpu=False):
     """Builds a tensor dictionary based on the InputReader config.
 
     Args:
@@ -69,6 +70,7 @@ def build(input_reader_config,
     assert all([n != '' for n in target_assigner.classes]), "you must specify class_name in anchor_generators."
     dataset_cls = get_dataset_class(dataset_cfg.dataset_class_name)
     assert dataset_cls.NumPointFeatures >= 3, "you must set this to correct value"
+    assert dataset_cls.NumPointFeatures == num_point_features, "currently you need keep them same"
     prep_func = partial(
         prep_pointcloud,
         root_path=dataset_cfg.kitti_root_path,
@@ -95,7 +97,8 @@ def build(input_reader_config,
         remove_points_after_sample=prep_cfg.remove_points_after_sample,
         remove_environment=prep_cfg.remove_environment,
         use_group_id=prep_cfg.use_group_id,
-        out_size_factor=out_size_factor)
+        out_size_factor=out_size_factor,
+        multi_gpu=multi_gpu)
 
     ret = target_assigner.generate_anchors(feature_map_size)
     class_names = target_assigner.classes
