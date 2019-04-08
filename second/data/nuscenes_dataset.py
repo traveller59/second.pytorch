@@ -508,10 +508,7 @@ def _fill_trainval_infos(nusc,
                 break
         info["sweeps"] = sweeps
         if not test:
-            ann_tokens = nusc.field2token('sample_annotation', 'sample_token', sample["token"])
-            annotations = []
-            for anno_token in ann_tokens:
-                annotations.append(nusc.get("sample_annotation", anno_token))
+            annotations = [nusc.get('sample_annotation', token) for token in sample['anns']]
             locs = np.array([b.center for b in boxes]).reshape(-1, 3)
             dims = np.array([b.wlh for b in boxes]).reshape(-1, 3)
             rots = np.array([b.orientation.yaw_pitch_roll[0]
