@@ -73,33 +73,50 @@ class NuScenesDataset(Dataset):
         for info in self._nusc_infos:
             gt_names = info["gt_names"]
             gt_boxes = info["gt_boxes"]
+            num_lidar_pts = info["num_lidar_pts"]
+            mask = num_lidar_pts > 0
+            gt_names = gt_names[mask]
+            gt_boxes = gt_boxes[mask]
+            num_lidar_pts = num_lidar_pts[mask]
+
             mask = np.array([n in self._kitti_name_mapping for n in gt_names],
                             dtype=np.bool_)
             gt_names = gt_names[mask]
             gt_boxes = gt_boxes[mask]
+            num_lidar_pts = num_lidar_pts[mask]
             gt_names_mapped = [self._kitti_name_mapping[n] for n in gt_names]
             det_range = np.array([cls_range_map[n] for n in gt_names_mapped])
             det_range = det_range[..., np.newaxis] @ np.array([[-1, -1, 1, 1]])
             mask = (gt_boxes[:, :2] >= det_range[:, :2]).all(1)
             mask &= (gt_boxes[:, :2] <= det_range[:, 2:]).all(1)
-            N = int(np.sum(mask))
+            gt_names = gt_names[mask]
+            gt_boxes = gt_boxes[mask]
+            num_lidar_pts = num_lidar_pts[mask]
+            # use occluded to control easy/moderate/hard in kitti
+            easy_mask = num_lidar_pts > 15
+            moderate_mask = num_lidar_pts > 7
+            occluded = np.zeros([num_lidar_pts.shape[0]])
+            occluded[:] = 2
+            occluded[moderate_mask] = 1
+            occluded[easy_mask] = 0
+            N = len(gt_boxes)
             gt_annos.append({
                 "bbox":
                 np.tile(np.array([[0, 0, 50, 50]]), [N, 1]),
                 "alpha":
                 np.full(N, -10),
                 "occluded":
-                np.zeros(N),
+                occluded,
                 "truncated":
                 np.zeros(N),
                 "name":
-                gt_names[mask],
+                gt_names,
                 "location":
-                gt_boxes[mask][:, :3],
+                gt_boxes[:, :3],
                 "dimensions":
-                gt_boxes[mask][:, 3:6],
+                gt_boxes[:, 3:6],
                 "rotation_y":
-                gt_boxes[mask][:, 6],
+                gt_boxes[:, 6],
             })
         return gt_annos
 
@@ -137,6 +154,7 @@ class NuScenesDataset(Dataset):
         points[:, 4] = 0
         sweep_points_list = [points]
         ts = info["timestamp"] / 1e6
+        
         for sweep in info["sweeps"]:
             points_sweep = np.fromfile(
                 str(sweep["lidar_path"]), dtype=np.float32,
@@ -148,6 +166,7 @@ class NuScenesDataset(Dataset):
             points_sweep[:, :3] += sweep["sweep2lidar_translation"]
             points_sweep[:, 4] = ts - sweep_ts
             sweep_points_list.append(points_sweep)
+        
         points = np.concatenate(sweep_points_list, axis=0)[:, [0, 1, 2, 4]]
         
         if read_test_image:
@@ -161,7 +180,6 @@ class NuScenesDataset(Dataset):
                 "data": image_str,
                 "datatype": Path(info["cam_front_path"]).suffix[1:],
             }
-
         # mask = box_np_ops.points_in_rbbox(points, info["gt_boxes"]).any(-1)
         # points = points[~mask]
         res["lidar"]["points"] = points
@@ -173,8 +191,13 @@ class NuScenesDataset(Dataset):
         return res
 
     def evaluation_kitti(self, detections, output_dir):
-        """eval by kitti evaluation tool
+        """eval by kitti evaluation tool.
+        I use num_lidar_pts to set easy, mod, hard.
+        easy: num>15, mod: num>7, hard: num>0.
         """
+        print("++++++++NuScenes KITTI unofficial Evaluation:")
+        print("++++++++easy: num_lidar_pts>15, mod: num_lidar_pts>7, hard: num_lidar_pts>0")
+        print("++++++++The bbox AP is invalid. Don't forget to ignore it.")
         class_names = self._class_names
         gt_annos = self.ground_truth_annotations
         if gt_annos is None:
@@ -424,6 +447,7 @@ def _fill_trainval_infos(nusc,
                              sd_rec['calibrated_sensor_token'])
         pose_record = nusc.get('ego_pose', sd_rec['ego_pose_token'])
         lidar_path, boxes, _ = nusc.get_sample_data(lidar_token)
+        
         cam_path, _, cam_intrinsic = nusc.get_sample_data(cam_front_token)
         assert Path(lidar_path).exists(), "you must download all trainval data."
         info = {
@@ -484,6 +508,10 @@ def _fill_trainval_infos(nusc,
                 break
         info["sweeps"] = sweeps
         if not test:
+            ann_tokens = nusc.field2token('sample_annotation', 'sample_token', sample["token"])
+            annotations = []
+            for anno_token in ann_tokens:
+                annotations.append(nusc.get("sample_annotation", anno_token))
             locs = np.array([b.center for b in boxes]).reshape(-1, 3)
             dims = np.array([b.wlh for b in boxes]).reshape(-1, 3)
             rots = np.array([b.orientation.yaw_pitch_roll[0]
@@ -494,8 +522,11 @@ def _fill_trainval_infos(nusc,
                     names[i] = NuScenesDataset.NameMapping[names[i]]
             names = np.array(names)
             gt_boxes = np.concatenate([locs, dims, -rots - np.pi / 2], axis=1)
+            assert len(gt_boxes) == len(annotations), f"{len(gt_boxes)}, {len(annotations)}"
             info["gt_boxes"] = gt_boxes
             info["gt_names"] = names
+            info["num_lidar_pts"] = np.array([a["num_lidar_pts"] for a in annotations])
+            info["num_radar_pts"] = np.array([a["num_lidar_pts"] for a in annotations])
         if sample["scene_token"] in train_scenes:
             train_nusc_infos.append(info)
         else:
