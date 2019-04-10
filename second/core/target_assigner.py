@@ -67,7 +67,6 @@ class TargetAssigner:
                   anchors_mask=None,
                   gt_classes=None,
                   gt_names=None):
-
         def similarity_fn(anchors, gt_boxes):
             anchors_rbv = anchors[:, [0, 1, 3, 4, 6]]
             gt_boxes_rbv = gt_boxes[:, [0, 1, 3, 4, 6]]
@@ -78,20 +77,23 @@ class TargetAssigner:
             return self._box_coder.encode(boxes, anchors)
 
         targets_list = []
-        anchor_start_idx = 0
+        anchor_loc_idx = 0
+
         for class_name, anchor_dict in anchors_dict.items():
             mask = np.array([c == class_name for c in gt_names],
                             dtype=np.bool_)
-            anchors = anchor_dict["anchors"].reshape(-1, self.box_coder.code_size)
-            num_anchors = anchors.shape[0]
+            feature_map_size = anchor_dict["anchors"].shape[:3]
+            num_loc = anchor_dict["anchors"].shape[-2]
             if anchors_mask is not None:
-                anchors_mask_class = anchors_mask[anchor_start_idx:anchor_start_idx+num_anchors]
+                anchors_mask = anchors_mask.reshape(*feature_map_size, -1)
+                anchors_mask_class = anchors_mask[
+                    ..., anchor_loc_idx:anchor_loc_idx + num_loc].reshape(-1)
                 prune_anchor_fn = lambda _: np.where(anchors_mask_class)[0]
             else:
                 prune_anchor_fn = None
-            
+
             targets = create_target_np(
-                anchors,
+                anchor_dict["anchors"].reshape(-1, 7),
                 gt_boxes[mask],
                 similarity_fn,
                 box_encoding_fn,
@@ -103,9 +105,9 @@ class TargetAssigner:
                 rpn_batch_size=self._sample_size,
                 norm_by_num_examples=False,
                 box_code_size=self.box_coder.code_size)
-            anchor_start_idx += num_anchors
+            anchor_loc_idx += num_loc
             targets_list.append(targets)
-            feature_map_size = anchor_dict["anchors"].shape[:3]
+
         targets_dict = {
             "labels": [t["labels"] for t in targets_list],
             "bbox_targets": [t["bbox_targets"] for t in targets_list],
