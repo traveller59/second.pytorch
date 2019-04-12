@@ -48,6 +48,8 @@ def example_convert_to_torch(example, dtype=torch.float32,
                 calib[k1] = torch.tensor(
                     v1, dtype=dtype, device=device).to(dtype)
             example_torch[k] = calib
+        elif k == "num_voxels":
+            example_torch[k] = torch.tensor(v, device=device)
         else:
             example_torch[k] = v
     return example_torch
@@ -250,7 +252,7 @@ def train(config_path,
                         net.clear_metrics()
                     data_iter = iter(dataloader)
                     example = next(data_iter)
-                example_torch = example_convert_to_torch(example, float_dtype)
+                example_torch = example_convert_to_torch(example, float_dtype, device)
 
                 batch_size = example["anchors"].shape[0]
 
@@ -263,7 +265,7 @@ def train(config_path,
                 cls_neg_loss = ret_dict["cls_neg_loss"]
                 loc_loss = ret_dict["loc_loss"]
                 cls_loss = ret_dict["cls_loss"]
-                dir_loss_reduced = ret_dict["dir_loss_reduced"]
+                dir_loss_reduced = ret_dict["dir_loss_reduced"].mean()
                 cared = ret_dict["cared"]
                 labels = example_torch["labels"]
                 if train_cfg.enable_mixed_precision:

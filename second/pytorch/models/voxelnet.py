@@ -244,7 +244,7 @@ class VoxelNet(nn.Module):
         num_points = example["num_points"]
         coors = example["coordinates"]
         if len(num_points.shape) == 2: # multi-gpu
-            num_voxel_per_batch = example["num_voxels"].reshape(-1)
+            num_voxel_per_batch = example["num_voxels"].cpu().numpy().reshape(-1)
             voxel_list = []
             num_points_list = []
             coors_list = []
