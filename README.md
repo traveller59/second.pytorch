@@ -46,13 +46,27 @@ bev  AP:90.38, 88.20, 86.98
 3d   AP:89.16, 78.78, 77.41
 ```
 
-### Performance in NuScenes validation set (all.pp.config, NuScenes mini train set)
+### Performance in NuScenes validation set (all.pp.config, NuScenes mini train set, 3517 samples, not v1.0-mini)
 
 ```
 car Nusc dist AP@0.5, 1.0, 2.0, 4.0
-62.80, 73.30, 76.85, 78.87
+62.90, 73.07, 76.77, 78.79
+bicycle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.00, 0.00, 0.00, 0.00
+bus Nusc dist AP@0.5, 1.0, 2.0, 4.0
+9.53, 26.17, 38.01, 40.60
+construction_vehicle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.00, 0.00, 0.44, 1.43
+motorcycle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+9.25, 12.90, 13.69, 14.11
 pedestrian Nusc dist AP@0.5, 1.0, 2.0, 4.0
-61.09, 62.20, 63.66, 65.89
+61.44, 62.61, 64.09, 66.35
+traffic_cone Nusc dist AP@0.5, 1.0, 2.0, 4.0
+11.63, 13.14, 15.81, 21.22
+trailer Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.80, 9.90, 17.61, 23.26
+truck Nusc dist AP@0.5, 1.0, 2.0, 4.0
+9.81, 21.40, 27.55, 30.34
 ```
 
 ## Install

@@ -10,7 +10,7 @@
 
 * Some data augmentation will harm detection performance such as global rotation if their value is too large.
 
-* Use KITTI pretrain model if possible.
+* Use KITTI pretrain model if possible. You can use a pointpillars xyres_16 car model in [google drive](https://drive.google.com/open?id=1YOpgRkBgmSAJwMknoXmitEArNitZz63C) as pretrained model.
 
 ## Config Guide
 
