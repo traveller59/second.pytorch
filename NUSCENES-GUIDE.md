@@ -1,6 +1,6 @@
 # Nuscenes Train and Eval guide
 
-## Generate Tips
+## General Tips
 
 * Nuscenes dataset evaluation contains many hard examples, you need to modify nms parameters (decrease score threshold, increase max size). You can use ```v1.0-mini``` to tune them.
 

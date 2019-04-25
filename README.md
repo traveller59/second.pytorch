@@ -46,7 +46,7 @@ bev  AP:90.38, 88.20, 86.98
 3d   AP:89.16, 78.78, 77.41
 ```
 
-### Performance in NuScenes validation set (NuScenes mini train set)
+### Performance in NuScenes validation set (all.pp.config, NuScenes mini train set)
 
 ```
 car Nusc dist AP@0.5, 1.0, 2.0, 4.0
