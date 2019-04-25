@@ -3,6 +3,8 @@ SECOND detector.
 
 ONLY support python 3.6+, pytorch 1.0.0+. Tested in Ubuntu 16.04/18.04/Windows 10.
 
+If you want to train nuscenes dataset, see [this](NUSCENES-GUIDE.md).
+
 ## News
 
 2019-4-1: SECOND V1.6.0alpha released: New Data API, [NuScenes](https://www.nuscenes.org) support, [PointPillars](https://github.com/nutonomy/second.pytorch) support, fp16 and multi-gpu support.
@@ -42,6 +44,15 @@ Car AP@0.70, 0.70, 0.70:
 bbox AP:97.65, 89.59, 88.72
 bev  AP:90.38, 88.20, 86.98
 3d   AP:89.16, 78.78, 77.41
+```
+
+### Performance in NuScenes validation set (NuScenes mini train set)
+
+```
+car Nusc dist AP@0.5, 1.0, 2.0, 4.0
+62.80, 73.30, 76.85, 78.87
+pedestrian Nusc dist AP@0.5, 1.0, 2.0, 4.0
+61.09, 62.20, 63.66, 65.89
 ```
 
 ## Install
@@ -149,6 +160,7 @@ train_input_reader: {
     ...
   }
   dataset: {
+    dataset_class_name: "DATASET_NAME"
     kitti_info_path: "/path/to/dataset_infos_train.pkl"
     kitti_root_path: "DATASET_ROOT"
   }
@@ -157,6 +169,7 @@ train_input_reader: {
 eval_input_reader: {
   ...
   dataset: {
+    dataset_class_name: "DATASET_NAME"
     kitti_info_path: "/path/to/dataset_infos_val.pkl"
     kitti_root_path: "DATASET_ROOT"
   }
@@ -182,6 +195,10 @@ Assume you have 4 GPUs and want to train with 3 GPUs:
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,3 python ./pytorch/train.py train --config_path=./configs/car.fhd.config --model_dir=/path/to/model_dir --multi_gpu=True
 ```
+
+Note: The batch_size and num_workers in config file is per-GPU, if you use multi-gpu, they will be multiplied by number of GPUs. Don't modify them manually.
+
+You need to modify total step in config file. For example, 50 epochs = 15500 steps for car.lite.config and single GPU, if you use 4 GPUs, you need to divide ```steps``` and ```steps_per_eval``` by 4.
 
 #### train with fp16 (mixed precision)
 
