@@ -95,24 +95,3 @@ class Dataset(object):
     def evaluation(self, dt_annos, output_dir):
         """Dataset must provide a evaluation function to evaluate model."""
         raise NotImplementedError
-
-    @property
-    def ground_truth_annotations(self):
-        """
-        If you want to eval by my KITTI eval function, you must 
-        provide the correct format annotations.
-        ground_truth_annotations format:
-        {
-            bbox: [N, 4], if you fill fake data, MUST HAVE >25 HEIGHT!!!!!!
-            alpha: [N], you can use -10 to ignore it.
-            occluded: [N], you can use zero.
-            truncated: [N], you can use zero.
-            name: [N]
-            location: [N, 3] center of 3d box.
-            dimensions: [N, 3] dim of 3d box.
-            rotation_y: [N] angle.
-        }
-        all fields must be filled, but some fields can fill
-        zero.
-        """
-        raise NotImplementedError

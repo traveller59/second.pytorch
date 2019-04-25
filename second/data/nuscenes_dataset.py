@@ -17,10 +17,10 @@ from second.data.dataset import Dataset
 from second.utils.eval import get_coco_eval_result, get_official_eval_result
 from second.utils.progress_bar import progress_bar_iter as prog_bar
 from second.utils.timer import simple_timer
-import psutil
+
 
 class NuScenesDataset(Dataset):
-    NumPointFeatures = 4 # xyz, timestamp. set 4 to use kitti pretrain
+    NumPointFeatures = 4  # xyz, timestamp. set 4 to use kitti pretrain
     NameMapping = {
         'movable_object.barrier': 'barrier',
         'vehicle.bicycle': 'bicycle',
@@ -55,9 +55,10 @@ class NuScenesDataset(Dataset):
         self._kitti_name_mapping = {
             "car": "car",
             "pedestrian": "pedestrian",
-        } # we only eval these classes in kitti
+        }  # we only eval these classes in kitti
         self.version = self._metadata["version"]
         self.eval_version = "cvpr_2019"
+        self._with_velocity = False
 
     def __len__(self):
         return len(self._nusc_infos)
@@ -148,13 +149,12 @@ class NuScenesDataset(Dataset):
         }
         lidar_path = Path(info['lidar_path'])
         points = np.fromfile(
-            str(lidar_path), dtype=np.float32, count=-1).reshape([-1,
-                                                                5])
+            str(lidar_path), dtype=np.float32, count=-1).reshape([-1, 5])
         points[:, 3] /= 255
         points[:, 4] = 0
         sweep_points_list = [points]
         ts = info["timestamp"] / 1e6
-        
+
         for sweep in info["sweeps"]:
             points_sweep = np.fromfile(
                 str(sweep["lidar_path"]), dtype=np.float32,
@@ -166,9 +166,9 @@ class NuScenesDataset(Dataset):
             points_sweep[:, :3] += sweep["sweep2lidar_translation"]
             points_sweep[:, 4] = ts - sweep_ts
             sweep_points_list.append(points_sweep)
-        
+
         points = np.concatenate(sweep_points_list, axis=0)[:, [0, 1, 2, 4]]
-        
+
         if read_test_image:
             if Path(info["cam_front_path"]).exists():
                 with open(str(info["cam_front_path"]), 'rb') as f:
@@ -180,13 +180,18 @@ class NuScenesDataset(Dataset):
                 "data": image_str,
                 "datatype": Path(info["cam_front_path"]).suffix[1:],
             }
-        # mask = box_np_ops.points_in_rbbox(points, info["gt_boxes"]).any(-1)
-        # points = points[~mask]
         res["lidar"]["points"] = points
         if 'gt_boxes' in info:
+            mask = info["num_lidar_pts"] > 0
+            gt_boxes = info["gt_boxes"][mask]
+            if self._with_velocity:
+                gt_velocity = info["gt_velocity"][mask]
+                nan_mask = np.isnan(gt_velocity[:, 0])
+                gt_velocity[nan_mask] = [0.0, 0.0]
+                gt_boxes = np.concatenate([gt_boxes, gt_velocity], axis=-1)
             res["lidar"]["annotations"] = {
-                'boxes': info["gt_boxes"],
-                'names': info["gt_names"],
+                'boxes': gt_boxes,
+                'names': info["gt_names"][mask],
             }
         return res
 
@@ -196,7 +201,9 @@ class NuScenesDataset(Dataset):
         easy: num>15, mod: num>7, hard: num>0.
         """
         print("++++++++NuScenes KITTI unofficial Evaluation:")
-        print("++++++++easy: num_lidar_pts>15, mod: num_lidar_pts>7, hard: num_lidar_pts>0")
+        print(
+            "++++++++easy: num_lidar_pts>15, mod: num_lidar_pts>7, hard: num_lidar_pts>0"
+        )
         print("++++++++The bbox AP is invalid. Don't forget to ignore it.")
         class_names = self._class_names
         gt_annos = self.ground_truth_annotations
@@ -299,45 +306,63 @@ class NuScenesDataset(Dataset):
         for det in detections:
             annos = []
             boxes = _second_det_to_nusc_box(det)
-            boxes = _lidar_nusc_box_to_global(token2info[det["metadata"]["token"]], boxes)
             for i, box in enumerate(boxes):
                 name = mapped_class_names[box.label]
+                velocity = box.velocity[:2].tolist()
+                if len(token2info[det["metadata"]["token"]]["sweeps"]) == 0:
+                    velocity = (np.nan, np.nan)
+                box.velocity = np.array([*velocity, 0.0])
+            boxes = _lidar_nusc_box_to_global(
+                token2info[det["metadata"]["token"]], boxes,
+                mapped_class_names, "cvpr_2019")
+            for i, box in enumerate(boxes):
+                name = mapped_class_names[box.label]
+                velocity = box.velocity[:2].tolist()
                 nusc_anno = {
                     "sample_token": det["metadata"]["token"],
                     "translation": box.center.tolist(),
                     "size": box.wlh.tolist(),
                     "rotation": box.orientation.elements.tolist(),
-                    "velocity": [0.0, 0.0],
+                    "velocity": velocity,
                     "detection_name": name,
                     "detection_score": box.score,
                     "attribute_name": '',
                 }
                 annos.append(nusc_anno)
             nusc_annos[det["metadata"]["token"]] = annos
-        res_path = str(Path(output_dir) / "results_nusc.json")
+        res_path = Path(output_dir) / "results_nusc.json"
         with open(res_path, "w") as f:
             json.dump(nusc_annos, f)
         eval_main_file = Path(__file__).resolve().parent / "nusc_eval.py"
         # why add \"{}\"? to support path with spaces.
         cmd = f"python {str(eval_main_file)} --root_path=\"{str(self._root_path)}\""
         cmd += f" --version={self.version} --eval_version={self.eval_version}"
-        cmd += f" --res_path=\"{res_path}\" --eval_set={eval_set_map[self.version]}"
+        cmd += f" --res_path=\"{str(res_path)}\" --eval_set={eval_set_map[self.version]}"
         cmd += f" --output_dir=\"{output_dir}\""
         # use subprocess can release all nusc memory after evaluation
         subprocess.check_output(cmd, shell=True)
         with open(Path(output_dir) / "metrics.json", "r") as f:
             metrics = json.load(f)
         detail = {}
+        res_path.unlink()  # delete results_nusc.json since it's very large
         result = f"Nusc {version} Evaluation\n"
         for name in mapped_class_names:
             detail[name] = {}
             for k, v in metrics["label_aps"][name].items():
                 detail[name][f"dist@{k}"] = v
+            tp_errs = []
+            for k, v in metrics["label_tp_errors"][name].items():
+                detail[name][k] = v
+                tp_errs.append(f"{k}={v:.4f}")
+
             threshs = ', '.join(list(metrics["label_aps"][name].keys()))
             scores = list(metrics["label_aps"][name].values())
             scores = ', '.join([f"{s * 100:.2f}" for s in scores])
             result += f"{name} Nusc dist AP@{threshs}\n"
             result += scores
+            result += "\n"
+            result += f"{name} Nusc TP errors\n"
+            result += '\n'.join(tp_errs)
             result += "\n"
         return {
             "results": {
@@ -349,24 +374,102 @@ class NuScenesDataset(Dataset):
         }
 
     def evaluation(self, detections, output_dir):
-        res_kitti = self.evaluation_kitti(detections, output_dir)
-
+        """kitti evaluation is very slow, remove it.
+        """
+        # res_kitti = self.evaluation_kitti(detections, output_dir)
         res_nusc = self.evaluation_nusc(detections, output_dir)
         res = {
             "results": {
                 "nusc": res_nusc["results"]["nusc"],
-                "kitti.official": res_kitti["results"]["official"],
-                "kitti.coco": res_kitti["results"]["coco"],
+                # "kitti.official": res_kitti["results"]["official"],
+                # "kitti.coco": res_kitti["results"]["coco"],
             },
             "detail": {
                 "eval.nusc": res_nusc["detail"]["nusc"],
-                "eval.kitti": {
-                    "official": res_kitti["detail"]["official"],
-                    "coco": res_kitti["detail"]["coco"],
-                },
+                # "eval.kitti": {
+                #     "official": res_kitti["detail"]["official"],
+                #     "coco": res_kitti["detail"]["coco"],
+                # },
             },
         }
         return res
+
+
+class NuScenesDatasetD8(NuScenesDataset):
+    """Nuscenes mini train set. only contains ~3500 samples.
+    recommend to use this to develop, train full set once before submit.
+    """
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        if len(self._nusc_infos) > 28000:
+            self._nusc_infos = list(
+                sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
+            self._nusc_infos = self._nusc_infos[::8]
+
+class NuScenesDatasetD8Velo(NuScenesDatasetD8):
+    """Nuscenes mini train set with velocity.
+    """
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self._with_velocity = True
+
+class NuScenesDatasetVelo(NuScenesDataset):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self._with_velocity = True
+
+class NuScenesDatasetD7(NuScenesDataset):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        if len(self._nusc_infos) > 28000:
+            self._nusc_infos = list(
+                sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
+            self._nusc_infos = self._nusc_infos[::7]
+
+
+class NuScenesDatasetD6(NuScenesDataset):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        if len(self._nusc_infos) > 28000:
+            self._nusc_infos = list(
+                sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
+            self._nusc_infos = self._nusc_infos[::6]
+
+
+class NuScenesDatasetD5(NuScenesDataset):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        if len(self._nusc_infos) > 28000:
+            self._nusc_infos = list(
+                sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
+            self._nusc_infos = self._nusc_infos[::5]
+
+
+class NuScenesDatasetD4(NuScenesDataset):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        if len(self._nusc_infos) > 28000:
+            self._nusc_infos = list(
+                sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
+            self._nusc_infos = self._nusc_infos[::4]
+
+
+class NuScenesDatasetD3(NuScenesDataset):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        if len(self._nusc_infos) > 28000:
+            self._nusc_infos = list(
+                sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
+            self._nusc_infos = self._nusc_infos[::3]
+
+
+class NuScenesDatasetD2(NuScenesDataset):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        if len(self._nusc_infos) > 28000:
+            self._nusc_infos = list(
+                sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
+            self._nusc_infos = self._nusc_infos[::2]
 
 
 def _second_det_to_nusc_box(detection):
@@ -379,23 +482,33 @@ def _second_det_to_nusc_box(detection):
     box_list = []
     for i in range(box3d.shape[0]):
         quat = pyquaternion.Quaternion(axis=[0, 0, 1], radians=box3d[i, 6])
+        velocity = (np.nan, np.nan, np.nan)
+        if box3d.shape[1] == 9:
+            velocity = (*box3d[i, 7:9], 0.0)
         box = Box(
             box3d[i, :3],
             box3d[i, 3:6],
             quat,
             label=labels[i],
-            score=scores[i])
+            score=scores[i],
+            velocity=velocity)
         box_list.append(box)
     return box_list
 
-
-def _lidar_nusc_box_to_global(info, boxes):
+def _lidar_nusc_box_to_global(info, boxes, classes, eval_version="cvpr_2019"):
     import pyquaternion
     box_list = []
     for box in boxes:
         # Move box to ego vehicle coord system
         box.rotate(pyquaternion.Quaternion(info['lidar2ego_rotation']))
         box.translate(np.array(info['lidar2ego_translation']))
+        from nuscenes.eval.detection.config import eval_detection_configs
+        # filter det in ego.
+        cls_range_map = eval_detection_configs[eval_version]["class_range"]
+        radius = np.linalg.norm(box.center[:2], 2)
+        det_range = cls_range_map[classes[box.label]]
+        if radius > det_range:
+            continue
         # Move box to global coord system
         box.rotate(pyquaternion.Quaternion(info['ego2global_rotation']))
         box.translate(np.array(info['ego2global_translation']))
@@ -447,9 +560,11 @@ def _fill_trainval_infos(nusc,
                              sd_rec['calibrated_sensor_token'])
         pose_record = nusc.get('ego_pose', sd_rec['ego_pose_token'])
         lidar_path, boxes, _ = nusc.get_sample_data(lidar_token)
-        
+
         cam_path, _, cam_intrinsic = nusc.get_sample_data(cam_front_token)
-        assert Path(lidar_path).exists(), "you must download all trainval data."
+        assert Path(lidar_path).exists(), (
+            "you must download all trainval data, key-frame only dataset performs far worse than sweeps."
+        )
         info = {
             "lidar_path": lidar_path,
             "cam_front_path": cam_path,
@@ -508,27 +623,45 @@ def _fill_trainval_infos(nusc,
                 break
         info["sweeps"] = sweeps
         if not test:
-            annotations = [nusc.get('sample_annotation', token) for token in sample['anns']]
+            annotations = [
+                nusc.get('sample_annotation', token)
+                for token in sample['anns']
+            ]
             locs = np.array([b.center for b in boxes]).reshape(-1, 3)
             dims = np.array([b.wlh for b in boxes]).reshape(-1, 3)
             rots = np.array([b.orientation.yaw_pitch_roll[0]
                              for b in boxes]).reshape(-1, 1)
+            velocity = np.array(
+                [nusc.box_velocity(token)[:2] for token in sample['anns']])
+            # convert velo from global to lidar
+            for i in range(len(boxes)):
+                velo = np.array([*velocity[i], 0.0])
+                velo = velo @ np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(l2e_r_mat).T
+                velocity[i] = velo[:2]
+
             names = [b.name for b in boxes]
             for i in range(len(names)):
                 if names[i] in NuScenesDataset.NameMapping:
                     names[i] = NuScenesDataset.NameMapping[names[i]]
             names = np.array(names)
+            # we need to convert rot to SECOND format.
+            # change the rot format will break all checkpoint, so...
             gt_boxes = np.concatenate([locs, dims, -rots - np.pi / 2], axis=1)
-            assert len(gt_boxes) == len(annotations), f"{len(gt_boxes)}, {len(annotations)}"
+            assert len(gt_boxes) == len(
+                annotations), f"{len(gt_boxes)}, {len(annotations)}"
             info["gt_boxes"] = gt_boxes
             info["gt_names"] = names
-            info["num_lidar_pts"] = np.array([a["num_lidar_pts"] for a in annotations])
-            info["num_radar_pts"] = np.array([a["num_lidar_pts"] for a in annotations])
+            info["gt_velocity"] = velocity.reshape(-1, 2)
+            info["num_lidar_pts"] = np.array(
+                [a["num_lidar_pts"] for a in annotations])
+            info["num_radar_pts"] = np.array(
+                [a["num_lidar_pts"] for a in annotations])
         if sample["scene_token"] in train_scenes:
             train_nusc_infos.append(info)
         else:
             val_nusc_infos.append(info)
     return train_nusc_infos, val_nusc_infos
+
 
 def create_nuscenes_infos(root_path, version="v1.0-trainval", max_sweeps=10):
     from nuscenes.nuscenes import NuScenes
@@ -596,39 +729,82 @@ def create_nuscenes_infos(root_path, version="v1.0-trainval", max_sweeps=10):
             pickle.dump(data, f)
 
 
-def get_box_mean(info_path, class_name="vehicle.car", eval_version="cvpr_2019"):
+def get_box_mean(info_path, class_name="vehicle.car",
+                 eval_version="cvpr_2019"):
     with open(info_path, 'rb') as f:
-        nusc_infos = pickle.load(f)
+        nusc_infos = pickle.load(f)["infos"]
     from nuscenes.eval.detection.config import eval_detection_configs
     cls_range_map = eval_detection_configs[eval_version]["class_range"]
-    gt_annos = []
 
     gt_boxes_list = []
+    gt_vels_list = []
     for info in nusc_infos:
         gt_boxes = info["gt_boxes"]
+        gt_vels = info["gt_velocity"]
         gt_names = info["gt_names"]
         mask = np.array([s == class_name for s in info["gt_names"]],
                         dtype=np.bool_)
         gt_names = gt_names[mask]
         gt_boxes = gt_boxes[mask]
+        gt_vels = gt_vels[mask]
         det_range = np.array([cls_range_map[n] for n in gt_names])
         det_range = det_range[..., np.newaxis] @ np.array([[-1, -1, 1, 1]])
         mask = (gt_boxes[:, :2] >= det_range[:, :2]).all(1)
         mask &= (gt_boxes[:, :2] <= det_range[:, 2:]).all(1)
 
         gt_boxes_list.append(gt_boxes[mask].reshape(-1, 7))
+        gt_vels_list.append(gt_vels[mask].reshape(-1, 2))
     gt_boxes_list = np.concatenate(gt_boxes_list, axis=0)
-    print(gt_boxes_list.mean(0))
+    gt_vels_list = np.concatenate(gt_vels_list, axis=0)
+    nan_mask = np.isnan(gt_vels_list[:, 0])
+    gt_vels_list = gt_vels_list[~nan_mask]
+
+    # return gt_vels_list.mean(0).tolist()
+    return {
+        "box3d": gt_boxes_list.mean(0).tolist(),
+        "detail": gt_boxes_list
+        # "velocity": gt_vels_list.mean(0).tolist(),
+    }
+
 
 def get_all_box_mean(info_path):
     det_names = set()
     for k, v in NuScenesDataset.NameMapping.items():
         if v not in det_names:
             det_names.add(v)
+    det_names = sorted(list(det_names))
+    res = {}
+    details = {}
     for k in det_names:
-        print(f"{k}: ")
-        get_box_mean(info_path, k)
+        result = get_box_mean(info_path, k)
+        details[k] = result["detail"]
+        res[k] = result["box3d"]
+    print(json.dumps(res, indent=2))
+    return details
 
+def render_nusc_result(nusc, results, sample_token):
+    from nuscenes.utils.data_classes import Box
+    from pyquaternion import Quaternion
+    annos = results[sample_token]
+    sample = nusc.get("sample", sample_token)
+    sd_rec = nusc.get('sample_data', sample['data']["LIDAR_TOP"])
+    cs_record = nusc.get('calibrated_sensor',
+                            sd_rec['calibrated_sensor_token'])
+    pose_record = nusc.get('ego_pose', sd_rec['ego_pose_token'])
+    boxes = []
+    for anno in annos:
+        rot = Quaternion(anno["rotation"])
+        box = Box(anno["translation"], anno["size"], rot, name=anno["detection_name"])
+        box.translate(-np.array(pose_record['translation']))
+        box.rotate(Quaternion(pose_record['rotation']).inverse)
+
+        #  Move box to sensor coord system
+        box.translate(-np.array(cs_record['translation']))
+        box.rotate(Quaternion(cs_record['rotation']).inverse)
+
+        boxes.append(box)
+    nusc.explorer.render_sample_data(sample["data"]["LIDAR_TOP"], extern_boxes=boxes, nsweeps=10)
+    nusc.explorer.render_sample_data(sample["data"]["LIDAR_TOP"], nsweeps=10)
 
 if __name__ == "__main__":
     fire.Fire()

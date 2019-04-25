@@ -133,20 +133,11 @@ class VoxelNet(nn.Module):
         )
         mid_class_dict = {
             "SparseMiddleExtractor": middle.SparseMiddleExtractor,
-            "SpMiddleD4HD": middle.SpMiddleD4HD,
-            "SpMiddleD8HD": middle.SpMiddleD8HD,
             "SpMiddleFHD": middle.SpMiddleFHD,
-            "SpMiddleFHDV2": middle.SpMiddleFHDV2,
-            "SpMiddleFHDLarge": middle.SpMiddleFHDLarge,
-            "SpMiddleResNetFHD": middle.SpMiddleResNetFHD,
-            "SpMiddleD4HDLite": middle.SpMiddleD4HDLite,
             "SpMiddleFHDLite": middle.SpMiddleFHDLite,
             "SpMiddle2K": middle.SpMiddle2K,
             "SpMiddleFHDPeople": middle.SpMiddleFHDPeople,
-            "SpMiddle2KPeople": middle.SpMiddle2KPeople,
-            "SpMiddleHDLite": middle.SpMiddleHDLite,
             "PointPillarsScatter": pointpillars.PointPillarsScatter,
-            "SpMiddleFHDLiteNoNorm": middle.SpMiddleFHDLiteNoNorm,
         }
         mid_class = mid_class_dict[middle_class_name]
         self.middle_feature_extractor = mid_class(
@@ -321,18 +312,20 @@ class VoxelNet(nn.Module):
                     dir_logits, dir_targets, weights=weights)
                 dir_loss = dir_loss.sum() / batch_size_dev
                 loss += dir_loss * self._direction_loss_weight
-            return {
+            res = {
                 "loss": loss,
                 "cls_loss": cls_loss,
                 "loc_loss": loc_loss,
                 "cls_pos_loss": cls_pos_loss,
                 "cls_neg_loss": cls_neg_loss,
                 "cls_preds": cls_preds,
-                "dir_loss_reduced": dir_loss,
                 "cls_loss_reduced": cls_loss_reduced,
                 "loc_loss_reduced": loc_loss_reduced,
                 "cared": cared,
             }
+            if self._use_direction_classifier:
+                res["dir_loss_reduced"] = dir_loss
+            return res
         else:
             self.start_timer("predict")
             with torch.no_grad():
@@ -358,7 +351,7 @@ class VoxelNet(nn.Module):
             meta_list = [None] * batch_size
         else:
             meta_list = example["metadata"]
-        batch_anchors = example["anchors"].view(batch_size, -1, 7)
+        batch_anchors = example["anchors"].view(batch_size, -1, example["anchors"].shape[-1])
         if "anchors_mask" not in example:
             batch_anchors_mask = [None] * batch_size
         else:
@@ -510,8 +503,8 @@ class VoxelNet(nn.Module):
                 label_preds = selected_labels
                 if self._use_direction_classifier:
                     dir_labels = selected_dir_labels
-                    opp_labels = (box_preds[..., -1] > 0) ^ dir_labels.byte()
-                    box_preds[..., -1] += torch.where(
+                    opp_labels = (box_preds[..., 6] > 0) ^ dir_labels.byte()
+                    box_preds[..., 6] += torch.where(
                         opp_labels,
                         torch.tensor(np.pi).type_as(box_preds),
                         torch.tensor(0.0).type_as(box_preds))
@@ -541,7 +534,7 @@ class VoxelNet(nn.Module):
                 device = batch_box_preds.device
                 predictions_dict = {
                     "box3d_lidar":
-                    torch.zeros([0, 7], dtype=dtype, device=device),
+                    torch.zeros([0, box_preds.shape[-1]], dtype=dtype, device=device),
                     "scores":
                     torch.zeros([0], dtype=dtype, device=device),
                     "label_preds":
@@ -610,11 +603,11 @@ class VoxelNet(nn.Module):
 
 
 def add_sin_difference(boxes1, boxes2):
-    rad_pred_encoding = torch.sin(boxes1[..., -1:]) * torch.cos(
-        boxes2[..., -1:])
-    rad_tg_encoding = torch.cos(boxes1[..., -1:]) * torch.sin(boxes2[..., -1:])
-    boxes1 = torch.cat([boxes1[..., :-1], rad_pred_encoding], dim=-1)
-    boxes2 = torch.cat([boxes2[..., :-1], rad_tg_encoding], dim=-1)
+    rad_pred_encoding = torch.sin(boxes1[..., 6:7]) * torch.cos(
+        boxes2[..., 6:7])
+    rad_tg_encoding = torch.cos(boxes1[..., 6:7]) * torch.sin(boxes2[..., 6:7])
+    boxes1 = torch.cat([boxes1[..., :6], rad_pred_encoding, boxes1[..., 7:]], dim=-1)
+    boxes2 = torch.cat([boxes2[..., :6], rad_tg_encoding, boxes2[..., 7:]], dim=-1)
     return boxes1, boxes2
 
 
@@ -711,8 +704,8 @@ def assign_weight_to_each_class(labels,
 
 def get_direction_target(anchors, reg_targets, one_hot=True):
     batch_size = reg_targets.shape[0]
-    anchors = anchors.view(batch_size, -1, 7)
-    rot_gt = reg_targets[..., -1] + anchors[..., -1]
+    anchors = anchors.view(batch_size, -1, anchors.shape[-1])
+    rot_gt = reg_targets[..., 6] + anchors[..., 6]
     dir_cls_targets = (rot_gt > 0).long()
     if one_hot:
         dir_cls_targets = torchplus.nn.one_hot(

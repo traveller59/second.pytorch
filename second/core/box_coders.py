@@ -28,14 +28,16 @@ class BoxCoder(object):
 
 
 class GroundBox3dCoder(BoxCoder):
-    def __init__(self, linear_dim=False, vec_encode=False):
+    def __init__(self, linear_dim=False, vec_encode=False, custom_ndim=0):
         super().__init__()
         self.linear_dim = linear_dim
         self.vec_encode = vec_encode
+        self.custom_ndim = custom_ndim
 
     @property
     def code_size(self):
-        return 8 if self.vec_encode else 7
+        res = 8 if self.vec_encode else 7
+        return self.custom_ndim + res
 
     def _encode(self, boxes, anchors):
         return box_np_ops.second_box_encode(boxes, anchors, self.vec_encode, self.linear_dim)
@@ -48,16 +50,19 @@ class BevBoxCoder(BoxCoder):
     """WARNING: this coder will return encoding with size=5, but 
     takes size=7 boxes, anchors
     """
-    def __init__(self, linear_dim=False, vec_encode=False, z_fixed=-1.0, h_fixed=2.0):
+    def __init__(self, linear_dim=False, vec_encode=False, z_fixed=-1.0, h_fixed=2.0, custom_ndim=0):
         super().__init__()
         self.linear_dim = linear_dim
         self.z_fixed = z_fixed
         self.h_fixed = h_fixed
         self.vec_encode = vec_encode
+        self.custom_ndim = custom_ndim
+        assert self.custom_ndim == 0
 
     @property
     def code_size(self):
-        return 6 if self.vec_encode else 5
+        res = 6 if self.vec_encode else 5
+        return self.custom_ndim + res
 
     def _encode(self, boxes, anchors):
         anchors = anchors[..., [0, 1, 3, 4, 6]]

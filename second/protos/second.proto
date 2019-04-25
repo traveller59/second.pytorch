@@ -28,7 +28,7 @@ message VoxelNet {
     repeated int32 layer_nums = 2;
     repeated int32 layer_strides = 3;
     repeated int32 num_filters = 4;
-    repeated int32 upsample_strides = 5;
+    repeated double upsample_strides = 5;
     repeated int32 num_upsample_filters = 6;
     bool use_groupnorm = 7;
     int32 num_groups = 8;

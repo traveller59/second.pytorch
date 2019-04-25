@@ -5,7 +5,7 @@ from pathlib import Path
 import pickle
 import shutil
 import time
-
+import re 
 import fire
 import numpy as np
 import torch
@@ -49,7 +49,7 @@ def example_convert_to_torch(example, dtype=torch.float32,
                     v1, dtype=dtype, device=device).to(dtype)
             example_torch[k] = calib
         elif k == "num_voxels":
-            example_torch[k] = torch.tensor(v, device=device)
+            example_torch[k] = torch.tensor(v)
         else:
             example_torch[k] = v
     return example_torch
@@ -62,6 +62,7 @@ def build_network(model_cfg, measure_time=False):
     target_assigner_cfg = model_cfg.target_assigner
     target_assigner = target_assigner_builder.build(target_assigner_cfg,
                                                     bv_range, box_coder)
+    box_coder.custom_ndim = target_assigner._anchor_generators[0].custom_ndim
     net = second_builder.build(
         model_cfg, voxel_generator, target_assigner, measure_time=measure_time)
     return net
@@ -72,6 +73,60 @@ def _worker_init_fn(worker_id):
     np.random.seed(time_seed + worker_id)
     print(f"WORKER {worker_id} seed:", np.random.get_state()[1][0])
 
+def freeze_params(params: dict, include: str=None, exclude: str=None):
+    assert isinstance(params, dict)
+    include_re = None
+    if include is not None:
+        include_re = re.compile(include)
+    exclude_re = None
+    if exclude is not None:
+        exclude_re = re.compile(exclude)
+    remain_params = []
+    for k, p in params.items():
+        if include_re is not None:
+            if include_re.match(k) is not None:
+                continue 
+        if exclude_re is not None:
+            if exclude_re.match(k) is None:
+                continue 
+        remain_params.append(p)
+    return remain_params
+
+def freeze_params_v2(params: dict, include: str=None, exclude: str=None):
+    assert isinstance(params, dict)
+    include_re = None
+    if include is not None:
+        include_re = re.compile(include)
+    exclude_re = None
+    if exclude is not None:
+        exclude_re = re.compile(exclude)
+    for k, p in params.items():
+        if include_re is not None:
+            if include_re.match(k) is not None:
+                p.requires_grad = False
+        if exclude_re is not None:
+            if exclude_re.match(k) is None:
+                p.requires_grad = False
+
+def filter_param_dict(state_dict: dict, include: str=None, exclude: str=None):
+    assert isinstance(state_dict, dict)
+    include_re = None
+    if include is not None:
+        include_re = re.compile(include)
+    exclude_re = None
+    if exclude is not None:
+        exclude_re = re.compile(exclude)
+    res_dict = {}
+    for k, p in state_dict.items():
+        if include_re is not None:
+            if include_re.match(k) is None:
+                continue
+        if exclude_re is not None:
+            if exclude_re.match(k) is not None:
+                continue 
+        res_dict[k] = p
+    return res_dict
+
 
 def train(config_path,
           model_dir,
@@ -80,8 +135,11 @@ def train(config_path,
           display_step=50,
           summary_step=5,
           pretrained_path=None,
+          pretrained_include=None,
+          pretrained_exclude=None,
+          freeze_include=None,
+          freeze_exclude=None,
           multi_gpu=False,
-          num_gpu=None,
           resume=False):
     """train a VoxelNet model specified by a config file.
     """
@@ -124,23 +182,28 @@ def train(config_path,
     #     net.convert_norm_to_float(net)
     target_assigner = net.target_assigner
     voxel_generator = net.voxel_generator
-    class_names = target_assigner.classes
-
-    
-    print("num_trainable parameters:", len(list(net.parameters())))
-    # for n, p in net.named_parameters():
-    #     print(n, p.shape)
-    # we need global_step to create lr_scheduler, so restore net first.
+    print("num parameters:", len(list(net.parameters())))
     torchplus.train.try_restore_latest_checkpoints(model_dir, [net])
     if pretrained_path is not None:
-        net.load_state_dict(torch.load(pretrained_path))
+        model_dict = net.state_dict()
+        pretrained_dict = torch.load(pretrained_path)
+        pretrained_dict = filter_param_dict(pretrained_dict, pretrained_include, pretrained_exclude)
+        new_pretrained_dict = {}
+        for k, v in pretrained_dict.items():
+            if k in model_dict and v.shape == model_dict[k].shape:
+                new_pretrained_dict[k] = v        
+        print("Load pretrained parameters:")
+        for k, v in new_pretrained_dict.items():
+            print(k, v.shape)
+        model_dict.update(new_pretrained_dict) 
+        net.load_state_dict(model_dict)
+        freeze_params_v2(dict(net.named_parameters()), freeze_include, freeze_exclude)
         net.clear_global_step()
         net.clear_metrics()
     if multi_gpu:
         net_parallel = torch.nn.DataParallel(net)
     else:
         net_parallel = net
-    gstep = net.get_global_step() - 1
     optimizer_cfg = train_cfg.optimizer
     loss_scale = train_cfg.loss_scale_factor
     fastai_optimizer = optimizer_builder.build(
@@ -148,6 +211,8 @@ def train(config_path,
         net,
         mixed=False,
         loss_scale=loss_scale)
+    if loss_scale < 0:
+        loss_scale = "dynamic"
     if train_cfg.enable_mixed_precision:
         max_num_voxels = input_cfg.preprocess.max_number_of_voxels * input_cfg.batch_size
         assert max_num_voxels < 65535, "spconv fp16 training only support this"
@@ -160,7 +225,6 @@ def train(config_path,
         net.metrics_to_float()
     else:
         amp_optimizer = fastai_optimizer
-    center_limit_range = model_cfg.post_center_limit_range
     torchplus.train.try_restore_latest_checkpoints(model_dir,
                                                    [fastai_optimizer])
     lr_scheduler = lr_scheduler_builder.build(optimizer_cfg, amp_optimizer,
@@ -171,10 +235,7 @@ def train(config_path,
         float_dtype = torch.float32
 
     if multi_gpu:
-        if num_gpu is None:
-            num_gpu = torch.cuda.device_count()
-        else:
-            assert num_gpu < torch.cuda.device_count()
+        num_gpu = torch.cuda.device_count()
         print(f"MULTI-GPU: use {num_gpu} gpu")
         collate_fn = merge_second_batch_multigpu
     else:
@@ -202,10 +263,11 @@ def train(config_path,
         dataset,
         batch_size=input_cfg.batch_size * num_gpu,
         shuffle=True,
-        num_workers=input_cfg.preprocess.num_workers,
+        num_workers=input_cfg.preprocess.num_workers * num_gpu,
         pin_memory=False,
         collate_fn=collate_fn,
-        worker_init_fn=_worker_init_fn)
+        worker_init_fn=_worker_init_fn,
+        drop_last=not multi_gpu)
     eval_dataloader = torch.utils.data.DataLoader(
         eval_dataset,
         batch_size=eval_input_cfg.batch_size, # only support multi-gpu train
@@ -214,45 +276,30 @@ def train(config_path,
         pin_memory=False,
         collate_fn=merge_second_batch)
 
-    data_iter = iter(dataloader)
-
     ######################
     # TRAINING
     ######################
     model_logging = SimpleModelLog(model_dir)
     model_logging.open()
     model_logging.log_text(proto_str + "\n", 0, tag="config")
-
-    total_step_elapsed = 0
-    remain_steps = train_cfg.steps - net.get_global_step()
+    start_step = net.get_global_step()
+    total_step = train_cfg.steps
     t = time.time()
-    ckpt_start_time = t
-
-    total_loop = train_cfg.steps // train_cfg.steps_per_eval + 1
-    # total_loop = remain_steps // train_cfg.steps_per_eval + 1
+    steps_per_eval = train_cfg.steps_per_eval
     clear_metrics_every_epoch = train_cfg.clear_metrics_every_epoch
 
-    if train_cfg.steps % train_cfg.steps_per_eval == 0:
-        total_loop -= 1
     amp_optimizer.zero_grad()
     step_times = []
+    step = start_step
     try:
-        for _ in range(total_loop):
-            if total_step_elapsed + train_cfg.steps_per_eval > train_cfg.steps:
-                steps = train_cfg.steps % train_cfg.steps_per_eval
-            else:
-                steps = train_cfg.steps_per_eval
-            for step in range(steps):
+        while True:
+            if clear_metrics_every_epoch:
+                net.clear_metrics()
+            for example in dataloader:
                 lr_scheduler.step(net.get_global_step())
-                try:
-                    example = next(data_iter)
-                except StopIteration:
-                    print("end epoch")
-                    if clear_metrics_every_epoch:
-                        net.clear_metrics()
-                    data_iter = iter(dataloader)
-                    example = next(data_iter)
-                example_torch = example_convert_to_torch(example, float_dtype, device)
+                time_metrics = example["metrics"]
+                example.pop("metrics")
+                example_torch = example_convert_to_torch(example, float_dtype)
 
                 batch_size = example["anchors"].shape[0]
 
@@ -265,7 +312,7 @@ def train(config_path,
                 cls_neg_loss = ret_dict["cls_neg_loss"]
                 loc_loss = ret_dict["loc_loss"]
                 cls_loss = ret_dict["cls_loss"]
-                dir_loss_reduced = ret_dict["dir_loss_reduced"].mean()
+                
                 cared = ret_dict["cared"]
                 labels = example_torch["labels"]
                 if train_cfg.enable_mixed_precision:
@@ -301,6 +348,7 @@ def train(config_path,
                         "step": global_step,
                         "steptime": np.mean(step_times),
                     }
+                    metrics["runtime"].update(time_metrics[0])
                     step_times = []
                     metrics.update(net_metrics)
                     metrics["loss"]["loc_elem"] = loc_loss_elem
@@ -309,6 +357,7 @@ def train(config_path,
                     metrics["loss"]["cls_neg_rt"] = float(
                         cls_neg_loss.detach().cpu().numpy())
                     if model_cfg.use_direction_classifier:
+                        dir_loss_reduced = ret_dict["dir_loss_reduced"].mean()
                         metrics["loss"]["dir_rt"] = float(
                             dir_loss_reduced.detach().cpu().numpy())
 
@@ -320,58 +369,56 @@ def train(config_path,
                         "lr": float(amp_optimizer.lr),
                         "mem_usage": psutil.virtual_memory().percent,
                     }
-                    # metrics["lr"] = float(
-                    #     fastai_optimizer.param_groups[0]['lr'])
                     model_logging.log_metrics(metrics, global_step)
 
-                ckpt_elasped_time = time.time() - ckpt_start_time
-                if ckpt_elasped_time > train_cfg.save_checkpoints_secs:
+                if global_step % steps_per_eval == 0:
                     torchplus.train.save_models(model_dir, [net, amp_optimizer],
                                                 net.get_global_step())
-                    ckpt_start_time = time.time()
-            total_step_elapsed += steps
-            torchplus.train.save_models(model_dir, [net, amp_optimizer],
-                                        net.get_global_step())
-            net.eval()
-            result_path_step = result_path / f"step_{net.get_global_step()}"
-            result_path_step.mkdir(parents=True, exist_ok=True)
-            model_logging.log_text("#################################",
-                                   global_step)
-            model_logging.log_text("# EVAL", global_step)
-            model_logging.log_text("#################################",
-                                   global_step)
-            model_logging.log_text("Generate output labels...", global_step)
-            t = time.time()
-            detections = []
-            prog_bar = ProgressBar()
-            net.clear_timer()
-            prog_bar.start((len(eval_dataset) + eval_input_cfg.batch_size - 1)
-                           // eval_input_cfg.batch_size)
-            for example in iter(eval_dataloader):
-                example = example_convert_to_torch(example, float_dtype)
-                detections += net(example)
-                prog_bar.print_bar()
+                    net.eval()
+                    result_path_step = result_path / f"step_{net.get_global_step()}"
+                    result_path_step.mkdir(parents=True, exist_ok=True)
+                    model_logging.log_text("#################################",
+                                        global_step)
+                    model_logging.log_text("# EVAL", global_step)
+                    model_logging.log_text("#################################",
+                                        global_step)
+                    model_logging.log_text("Generate output labels...", global_step)
+                    t = time.time()
+                    detections = []
+                    prog_bar = ProgressBar()
+                    net.clear_timer()
+                    prog_bar.start((len(eval_dataset) + eval_input_cfg.batch_size - 1)
+                                // eval_input_cfg.batch_size)
+                    for example in iter(eval_dataloader):
+                        example = example_convert_to_torch(example, float_dtype)
+                        detections += net(example)
+                        prog_bar.print_bar()
 
-            sec_per_ex = len(eval_dataset) / (time.time() - t)
-            model_logging.log_text(
-                f'generate label finished({sec_per_ex:.2f}/s). start eval:',
-                global_step)
-            result_dict = eval_dataset.dataset.evaluation(
-                detections, str(result_path_step))
-            for k, v in result_dict["results"].items():
-                model_logging.log_text("Evaluation {}".format(k), global_step)
-                model_logging.log_text(v, global_step)
-            model_logging.log_metrics(result_dict["detail"], global_step)
-            with open(result_path_step / "result.pkl", 'wb') as f:
-                pickle.dump(detections, f)
-            net.train()
+                    sec_per_ex = len(eval_dataset) / (time.time() - t)
+                    model_logging.log_text(
+                        f'generate label finished({sec_per_ex:.2f}/s). start eval:',
+                        global_step)
+                    result_dict = eval_dataset.dataset.evaluation(
+                        detections, str(result_path_step))
+                    for k, v in result_dict["results"].items():
+                        model_logging.log_text("Evaluation {}".format(k), global_step)
+                        model_logging.log_text(v, global_step)
+                    model_logging.log_metrics(result_dict["detail"], global_step)
+                    with open(result_path_step / "result.pkl", 'wb') as f:
+                        pickle.dump(detections, f)
+                    net.train()
+                step += 1
+                if step > total_step:
+                    break
+            if step > total_step:
+                break
     except Exception as e:
         torchplus.train.save_models(model_dir, [net, amp_optimizer],
                                     net.get_global_step())
+        model_logging.log_text(str(e), net.get_global_step())
         raise e
     finally:
         model_logging.close()
-    # save model before exit
     torchplus.train.save_models(model_dir, [net, amp_optimizer],
                                 net.get_global_step())
 
@@ -381,10 +428,13 @@ def evaluate(config_path,
              result_path=None,
              ckpt_path=None,
              measure_time=False,
-             batch_size=None):
+             batch_size=None,
+             **kwargs):
     """Don't support pickle_result anymore. if you want to generate kitti label file,
-    please use kitti_anno_to_label_file in second.data.kitti_dataset.
+    please use kitti_anno_to_label_file and convert_detection_to_kitti_annos
+    in second.data.kitti_dataset.
     """
+    assert len(kwargs) == 0
     model_dir = str(Path(model_dir).resolve())
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     result_name = 'eval_results'
@@ -408,10 +458,6 @@ def evaluate(config_path,
     model_cfg = config.model.second
     train_cfg = config.train_config
 
-    center_limit_range = model_cfg.post_center_limit_range
-    ######################
-    # BUILD VOXEL GENERATOR
-    ######################
     net = build_network(model_cfg, measure_time=measure_time).to(device)
     if train_cfg.enable_mixed_precision:
         net.half()
@@ -420,14 +466,12 @@ def evaluate(config_path,
         net.convert_norm_to_float(net)
     target_assigner = net.target_assigner
     voxel_generator = net.voxel_generator
-    class_names = target_assigner.classes
 
     if ckpt_path is None:
         assert model_dir is not None
         torchplus.train.try_restore_latest_checkpoints(model_dir, [net])
     else:
         torchplus.train.restore(ckpt_path, net)
-    # net.middle_feature_extractor.fused_middle_conv = net.middle_feature_extractor.middle_conv.fused()
     batch_size = batch_size or input_cfg.batch_size
     eval_dataset = input_reader_builder.build(
         input_cfg,
@@ -469,7 +513,8 @@ def evaluate(config_path,
         if measure_time:
             torch.cuda.synchronize()
             prep_example_times.append(time.time() - t1)
-        detections += net(example)
+        with torch.no_grad():
+            detections += net(example)
         bar.print_bar()
         if measure_time:
             t2 = time.time()
@@ -491,17 +536,6 @@ def evaluate(config_path,
         for k, v in result_dict["results"].items():
             print("Evaluation {}".format(k))
             print(v)
-
-
-def save_config(config_path, save_path):
-    config = pipeline_pb2.TrainEvalPipelineConfig()
-    with open(config_path, "r") as f:
-        proto_str = f.read()
-        text_format.Merge(proto_str, config)
-    ret = text_format.MessageToString(config, indent=2)
-    with open(save_path, 'w') as f:
-        f.write(ret)
-
 
 if __name__ == '__main__':
     fire.Fire()

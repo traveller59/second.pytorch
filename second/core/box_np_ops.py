@@ -4,7 +4,7 @@ import numba
 import numpy as np
 from spconv.utils import rbbox_iou, rbbox_intersection
 
-from second.core.geometry import points_in_convex_polygon_3d_jit
+from second.core.geometry import points_in_convex_polygon_3d_jit, points_count_convex_polygon_3d_jit
 
 
 def riou_cc(rbboxes, qrbboxes, standup_thresh=0.0):
@@ -40,12 +40,19 @@ def second_box_encode(boxes,
                       cylindrical=False):
     """box encode for VoxelNet in lidar
     Args:
-        boxes ([N, 7] Tensor): normal boxes: x, y, z, w, l, h, r
+        boxes ([N, 7 + ?] Tensor): normal boxes: x, y, z, w, l, h, r, custom values
         anchors ([N, 7] Tensor): anchors
     """
     # need to convert boxes to z-center format
-    xa, ya, za, wa, la, ha, ra = np.split(anchors, 7, axis=1)
-    xg, yg, zg, wg, lg, hg, rg = np.split(boxes, 7, axis=1)
+    box_ndim = anchors.shape[-1]
+    cas, cgs = [], []
+    if box_ndim > 7:
+        xa, ya, za, wa, la, ha, ra, *cas = np.split(anchors, box_ndim, axis=1)
+        xg, yg, zg, wg, lg, hg, rg, *cgs = np.split(boxes, box_ndim, axis=1)
+    else:
+        xa, ya, za, wa, la, ha, ra = np.split(anchors, box_ndim, axis=1)
+        xg, yg, zg, wg, lg, hg, rg = np.split(boxes, box_ndim, axis=1)
+
     diagonal = np.sqrt(la**2 + wa**2)  # 4.3
     xt = (xg - xa) / diagonal
     yt = (yg - ya) / diagonal
@@ -54,34 +61,57 @@ def second_box_encode(boxes,
     wt = np.log(wg / wa)
     ht = np.log(hg / ha)
     rt = rg - ra
-    return np.concatenate([xt, yt, zt, wt, lt, ht, rt], axis=1)
+    cts = [g - a for g, a in zip(cgs, cas)]
+    if smooth_dim:
+        lt = lg / la - 1
+        wt = wg / wa - 1
+        ht = hg / ha - 1
+    else:
+        lt = np.log(lg / la)
+        wt = np.log(wg / wa)
+        ht = np.log(hg / ha)
+    if encode_angle_to_vector:
+        rgx = np.cos(rg)
+        rgy = np.sin(rg)
+        rax = np.cos(ra)
+        ray = np.sin(ra)
+        rtx = rgx - rax
+        rty = rgy - ray
+        return np.concatenate([xt, yt, zt, wt, lt, ht, rtx, rty, *cts], axis=1)
+    else:
+        rt = rg - ra
+        return np.concatenate([xt, yt, zt, wt, lt, ht, rt, *cts], axis=1)
+
 
 
 def second_box_decode(box_encodings,
                       anchors,
                       encode_angle_to_vector=False,
-                      smooth_dim=False,
-                      cylindrical=False):
+                      smooth_dim=False):
     """box decode for VoxelNet in lidar
     Args:
         boxes ([N, 7] Tensor): normal boxes: x, y, z, w, l, h, r
         anchors ([N, 7] Tensor): anchors
     """
     # need to convert box_encodings to z-bottom format
-    xa, ya, za, wa, la, ha, ra = np.split(anchors, 7, axis=-1)
-    if encode_angle_to_vector:
-        xt, yt, zt, wt, lt, ht, rtx, rty = np.split(box_encodings, 8, axis=-1)
+    box_ndim = anchors.shape[-1]
+    cas, cts = [], []
+    if box_ndim > 7:
+        xa, ya, za, wa, la, ha, ra, *cas = np.split(anchors, box_ndim, axis=-1)
+        if encode_angle_to_vector:
+            xt, yt, zt, wt, lt, ht, rtx, rty, *cts = np.split(box_encodings, box_ndim + 1, axis=-1)
+        else:
+            xt, yt, zt, wt, lt, ht, rt, *cts = np.split(box_encodings, box_ndim, axis=-1)
     else:
-        xt, yt, zt, wt, lt, ht, rt = np.split(box_encodings, 7, axis=-1)
-    if cylindrical:
-        diagonal = np.sqrt(la**2 + wa**2)
-        xg = xt * diagonal + xa
-        yg = yt * diagonal + ya
-    else:
-        diagonal = np.sqrt(la**2 + wa**2)
-        xg = xt * diagonal + xa
-        yg = yt * diagonal + ya
+        xa, ya, za, wa, la, ha, ra = np.split(anchors, box_ndim, axis=-1)
+        if encode_angle_to_vector:
+            xt, yt, zt, wt, lt, ht, rtx, rty = np.split(box_encodings, box_ndim + 1, axis=-1)
+        else:
+            xt, yt, zt, wt, lt, ht, rt = np.split(box_encodings, box_ndim, axis=-1)
 
+    diagonal = np.sqrt(la**2 + wa**2)
+    xg = xt * diagonal + xa
+    yg = yt * diagonal + ya
     zg = zt * ha + za
     if smooth_dim:
         lg = (lt + 1) * la
@@ -99,7 +129,8 @@ def second_box_decode(box_encodings,
         rg = np.arctan2(rgy, rgx)
     else:
         rg = rt + ra
-    return np.concatenate([xg, yg, zg, wg, lg, hg, rg], axis=-1)
+    cgs = [t + a for t, a in zip(cts, cas)]
+    return np.concatenate([xg, yg, zg, wg, lg, hg, rg, *cgs], axis=-1)
 
 
 def bev_box_encode(boxes,
@@ -693,99 +724,18 @@ def iou_jit(boxes, query_boxes, eps=1.0):
     return overlaps
 
 
-@numba.jit(nopython=True)
-def iou_3d_jit(boxes, query_boxes, add1=True):
-    """calculate box iou3d, 
-    ----------
-    boxes: (N, 6) ndarray of float
-    query_boxes: (K, 6) ndarray of float
-    Returns
-    -------
-    overlaps: (N, K) ndarray of overlap between boxes and query_boxes
-    """
-    N = boxes.shape[0]
-    K = query_boxes.shape[0]
-    overlaps = np.zeros((N, K), dtype=boxes.dtype)
-    if add1:
-        add1 = 1.0
-    else:
-        add1 = 0.0
-    for k in range(K):
-        box_area = ((query_boxes[k, 3] - query_boxes[k, 0] + add1) *
-                    (query_boxes[k, 4] - query_boxes[k, 1] + add1) *
-                    (query_boxes[k, 5] - query_boxes[k, 2] + add1))
-        for n in range(N):
-            iw = (min(boxes[n, 3], query_boxes[k, 3]) - max(
-                boxes[n, 0], query_boxes[k, 0]) + add1)
-            if iw > 0:
-                ih = (min(boxes[n, 4], query_boxes[k, 4]) - max(
-                    boxes[n, 1], query_boxes[k, 1]) + add1)
-                if ih > 0:
-                    il = (min(boxes[n, 5], query_boxes[k, 5]) - max(
-                        boxes[n, 2], query_boxes[k, 2]) + add1)
-                    if il > 0:
-                        ua = float((boxes[n, 3] - boxes[n, 0] + add1) *
-                                   (boxes[n, 4] - boxes[n, 1] + add1) *
-                                   (boxes[n, 5] - boxes[n, 2] + add1) +
-                                   box_area - iw * ih * il)
-                        overlaps[n, k] = iw * ih * il / ua
-    return overlaps
-
-
-@numba.jit(nopython=True)
-def iou_nd_jit(boxes, query_boxes, add1=True):
-    """calculate box iou nd, 2x slower than iou_jit.
-    ----------
-    boxes: (N, ndim * 2) ndarray of float
-    query_boxes: (K, ndim * 2) ndarray of float
-    Returns
-    -------
-    overlaps: (N, K) ndarray of overlap between boxes and query_boxes
-    """
-    N = boxes.shape[0]
-    K = query_boxes.shape[0]
-    ndim = boxes.shape[1] // 2
-    overlaps = np.zeros((N, K), dtype=boxes.dtype)
-    side_lengths = np.zeros((ndim, ), dtype=boxes.dtype)
-    if add1:
-        add1 = 1.0
-    else:
-        add1 = 0.0
-    invalid = False
-    for k in range(K):
-        qbox_area = (query_boxes[k, ndim] - query_boxes[k, 0] + add1)
-        for i in range(1, ndim):
-            qbox_area *= (query_boxes[k, ndim + i] - query_boxes[k, i] + add1)
-        for n in range(N):
-            invalid = False
-            for i in range(ndim):
-                side_length = (
-                    min(boxes[n, i + ndim], query_boxes[k, i + ndim]) - max(
-                        boxes[n, i], query_boxes[k, i]) + add1)
-                if side_length <= 0:
-                    invalid = True
-                    break
-                side_lengths[i] = side_length
-            if not invalid:
-                box_area = (boxes[n, ndim] - boxes[n, 0] + add1)
-                for i in range(1, ndim):
-                    box_area *= (boxes[n, ndim + i] - boxes[n, i] + add1)
-                inter = side_lengths[0]
-                for i in range(1, ndim):
-                    inter *= side_lengths[i]
-                # inter = np.prod(side_lengths)
-                ua = float(box_area + qbox_area - inter)
-                overlaps[n, k] = inter / ua
-
-    return overlaps
-
-
 def points_in_rbbox(points, rbbox, z_axis=2, origin=(0.5, 0.5, 0.5)):
     rbbox_corners = center_to_corner_box3d(
         rbbox[:, :3], rbbox[:, 3:6], rbbox[:, 6], origin=origin, axis=z_axis)
     surfaces = corner_to_surfaces_3d(rbbox_corners)
     indices = points_in_convex_polygon_3d_jit(points[:, :3], surfaces)
     return indices
+
+def points_count_rbbox(points, rbbox, z_axis=2, origin=(0.5, 0.5, 0.5)):
+    rbbox_corners = center_to_corner_box3d(
+        rbbox[:, :3], rbbox[:, 3:6], rbbox[:, 6], origin=origin, axis=z_axis)
+    surfaces = corner_to_surfaces_3d(rbbox_corners)
+    return points_count_convex_polygon_3d_jit(points[:, :3], surfaces)
 
 
 def corner_to_surfaces_3d(corners):

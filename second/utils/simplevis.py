@@ -170,6 +170,22 @@ def draw_box_in_bev(img,
     colors = np.tile(np.array(color).reshape(1, 3), [bev_lines.shape[0], 1])
     colors = colors.astype(np.int32)
     img = cv2_draw_lines(img, bev_lines, colors, thickness)
+    if boxes.shape[1] == 9:
+        # draw velocity arrows
+        for box in boxes:
+            velo = box[-2:]
+            # velo = np.array([-np.sin(box[6]), -np.cos(box[6])])
+            velo_unified = velo
+            if np.isnan(velo_unified[0]):
+                continue
+            velo_unified = velo_unified * np.array(
+                img.shape[:2])[::-1] / (coors_range[3:5] - coors_range[:2])
+            center = box[:2] - coors_range[:2]
+            center = center * np.array(
+                img.shape[:2])[::-1] / (coors_range[3:5] - coors_range[:2])
+            center = tuple(map(lambda x: int(x), center))
+            center2 = tuple(map(lambda x: int(x), center + velo_unified))
+            cv2.arrowedLine(img, center, center2, color, thickness, tipLength=0.3)
     if labels is not None:
         if label_color is None:
             label_color = colors
@@ -179,7 +195,7 @@ def draw_box_in_bev(img,
             label_color = label_color.astype(np.int32)
 
         img = cv2_draw_text(img, text_center, labels, label_color,
-                            thickness * 2)
+                            thickness)
     return img
 
 
@@ -193,7 +209,7 @@ def kitti_vis(points, boxes, labels=None):
 
 def nuscene_vis(points, boxes, labels=None):
     vis_voxel_size = [0.1, 0.1, 0.1]
-    vis_point_range = [-50, -50, -3, 50, 50, 1]
+    vis_point_range = [-50, -50, -4, 50, 50, 2]
     bev_map = point_to_vis_bev(points, vis_voxel_size, vis_point_range)
     bev_map = draw_box_in_bev(bev_map, vis_point_range, boxes, [0, 255, 0], 2, labels)
 

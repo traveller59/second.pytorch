@@ -591,8 +591,8 @@ def noise_per_object_v3_(gt_boxes,
     use kitti viewer to test this function points_transform_
 
     Args:
-        gt_boxes: [N, 7], gt box in lidar.points_transform_
-        points: [M, 4], point cloud in lidar.
+        gt_boxes: [N, 7+?], gt box in lidar.points_transform_
+        points: [M, 3+], point cloud in lidar.
     """
     num_boxes = gt_boxes.shape[0]
     if not isinstance(rotation_perturb, (list, tuple, np.ndarray)):
@@ -603,10 +603,13 @@ def noise_per_object_v3_(gt_boxes,
         ]
     enable_grot = np.abs(global_random_rot_range[0] -
                          global_random_rot_range[1]) >= 1e-3
+    
     if not isinstance(center_noise_std, (list, tuple, np.ndarray)):
         center_noise_std = [
             center_noise_std, center_noise_std, center_noise_std
         ]
+    if all([c == 0 for c in center_noise_std]) and all([c == 0 for c in rotation_perturb]) and not enable_grot:
+        return
     if valid_mask is None:
         valid_mask = np.ones((num_boxes, ), dtype=np.bool_)
     center_noise_std = np.array(center_noise_std, dtype=gt_boxes.dtype)
@@ -686,8 +689,8 @@ def noise_per_object_v2_(gt_boxes,
     use kitti viewer to test this function points_transform_
 
     Args:
-        gt_boxes: [N, 7], gt box in lidar.points_transform_
-        points: [M, 4], point cloud in lidar.
+        gt_boxes: [N, 7+?], gt box in lidar.points_transform_
+        points: [M, 3+], point cloud in lidar.
     """
     num_boxes = gt_boxes.shape[0]
     if not isinstance(rotation_perturb, (list, tuple, np.ndarray)):
@@ -743,27 +746,6 @@ def noise_per_object_v2_(gt_boxes,
     box3d_transform_(gt_boxes, loc_transforms, rot_transforms, valid_mask)
 
 
-def global_scaling(gt_boxes, points, scale=0.05):
-    if not isinstance(scale, list):
-        scale = [-scale, scale]
-    noise_scale = np.random.uniform(scale[0] + 1, scale[1] + 1)
-    points[:, :3] *= noise_scale
-    gt_boxes[:, :6] *= noise_scale
-    return gt_boxes, points
-
-
-def global_rotation(gt_boxes, points, rotation=np.pi / 4):
-    if not isinstance(rotation, list):
-        rotation = [-rotation, rotation]
-    noise_rotation = np.random.uniform(rotation[0], rotation[1])
-    points[:, :3] = box_np_ops.rotation_points_single_angle(
-        points[:, :3], noise_rotation, axis=2)
-    gt_boxes[:, :3] = box_np_ops.rotation_points_single_angle(
-        gt_boxes[:, :3], noise_rotation, axis=2)
-    gt_boxes[:, 6] += noise_rotation
-    return gt_boxes, points
-
-
 def random_flip(gt_boxes, points, probability=0.5):
     enable = np.random.choice([False, True],
                               replace=False,
@@ -771,6 +753,8 @@ def random_flip(gt_boxes, points, probability=0.5):
     if enable:
         gt_boxes[:, 1] = -gt_boxes[:, 1]
         gt_boxes[:, 6] = -gt_boxes[:, 6] + np.pi
+        if gt_boxes.shape[1] == 9:
+            gt_boxes[:, 8] = -gt_boxes[:, 8]
         points[:, 1] = -points[:, 1]
     return gt_boxes, points
 
@@ -779,6 +763,8 @@ def global_scaling_v2(gt_boxes, points, min_scale=0.95, max_scale=1.05):
     noise_scale = np.random.uniform(min_scale, max_scale)
     points[:, :3] *= noise_scale
     gt_boxes[:, :6] *= noise_scale
+    if gt_boxes.shape[1] == 9:
+        gt_boxes[:, 7:] *= noise_scale
     return gt_boxes, points
 
 
@@ -790,6 +776,16 @@ def global_rotation_v2(gt_boxes, points, min_rad=-np.pi / 4,
     gt_boxes[:, :3] = box_np_ops.rotation_points_single_angle(
         gt_boxes[:, :3], noise_rotation, axis=2)
     gt_boxes[:, 6] += noise_rotation
+    if gt_boxes.shape[1] == 9:
+        # rotate velo vector
+        rot_cos = np.cos(noise_rotation)
+        rot_sin = np.sin(noise_rotation)
+        rot_mat_T = np.array(
+            [[rot_cos, -rot_sin], [rot_sin, rot_cos]],
+            dtype=points.dtype)
+
+        gt_boxes[:, 7:9] = gt_boxes[:, 7:9] @ rot_mat_T
+
     return gt_boxes, points
 
 

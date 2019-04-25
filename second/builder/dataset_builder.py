@@ -63,7 +63,6 @@ def build(input_reader_config,
     if len(db_sampler_cfg.sample_groups) > 0:  # enable sample
         db_sampler = dbsampler_builder.build(db_sampler_cfg)
     grid_size = voxel_generator.grid_size
-    # [352, 400]
     feature_map_size = grid_size[:2] // out_size_factor
     feature_map_size = [*feature_map_size, 1][::-1]
     print("feature_map_size", feature_map_size)
@@ -98,13 +97,20 @@ def build(input_reader_config,
         remove_environment=prep_cfg.remove_environment,
         use_group_id=prep_cfg.use_group_id,
         out_size_factor=out_size_factor,
-        multi_gpu=multi_gpu)
+        multi_gpu=multi_gpu,
+        min_points_in_gt=prep_cfg.min_num_of_points_in_gt)
 
     ret = target_assigner.generate_anchors(feature_map_size)
     class_names = target_assigner.classes
     anchors_dict = target_assigner.generate_anchors_dict(feature_map_size)
-    anchors = ret["anchors"]
-    anchors = anchors.reshape([-1, 7])
+    anchors_list = []
+    for k, v in anchors_dict.items():
+        anchors_list.append(v["anchors"])
+    
+    # anchors = ret["anchors"]
+    anchors = np.concatenate(anchors_list, axis=-2)
+    anchors = anchors.reshape([-1, target_assigner.box_ndim])
+    assert np.allclose(anchors, ret["anchors"].reshape(-1, target_assigner.box_ndim))
     matched_thresholds = ret["matched_thresholds"]
     unmatched_thresholds = ret["unmatched_thresholds"]
     anchors_bv = box_np_ops.rbbox2d_to_near_bbox(

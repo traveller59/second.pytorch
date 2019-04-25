@@ -26,15 +26,18 @@ def build(target_assigner_config, bv_range, box_coder):
     for a_cfg in anchor_cfg:
         anchor_generator = anchor_generator_builder.build(a_cfg)
         anchor_generators.append(anchor_generator)
-    similarity_calc = similarity_calculator_builder.build(
-        target_assigner_config.region_similarity_calculator)
+    similarity_calcs = []
+    for a_cfg in anchor_cfg:
+        similarity_calcs.append(similarity_calculator_builder.build(
+            a_cfg.region_similarity_calculator))
+
     positive_fraction = target_assigner_config.sample_positive_fraction
     if positive_fraction < 0:
         positive_fraction = None
     target_assigner = TargetAssigner(
         box_coder=box_coder,
         anchor_generators=anchor_generators,
-        region_similarity_calculator=similarity_calc,
         positive_fraction=positive_fraction,
-        sample_size=target_assigner_config.sample_size)
+        sample_size=target_assigner_config.sample_size,
+        region_similarity_calculators=similarity_calcs)
     return target_assigner

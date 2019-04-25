@@ -4,7 +4,7 @@ import time
 from collections import defaultdict
 from functools import partial
 
-# import cv2
+import cv2
 import numpy as np
 from skimage import io as imgio
 
@@ -45,6 +45,8 @@ def merge_second_batch(batch_list):
                     coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
                 coors.append(coor_pad)
             ret[key] = np.concatenate(coors, axis=0)
+        elif key == 'metrics':
+            ret[key] = elems
         else:
             ret[key] = np.stack(elems, axis=0)
     return ret
@@ -117,6 +119,7 @@ def prep_pointcloud(input_dict,
                     out_size_factor=2,
                     use_group_id=False,
                     multi_gpu=False,
+                    min_points_in_gt=-1,
                     out_dtype=np.float32):
     """convert point cloud to voxels, create targets if ground truths 
     exists.
@@ -124,7 +127,7 @@ def prep_pointcloud(input_dict,
     input_dict format: dataset.get_sensor_data format
 
     """
-    # t = time.time()
+    t = time.time()
     class_names = target_assigner.classes
     points = input_dict["lidar"]["points"]
     if training:
@@ -167,6 +170,7 @@ def prep_pointcloud(input_dict,
         _dict_select(gt_dict, selected)
         masks = box_np_ops.points_in_rbbox(points, gt_dict["gt_boxes"])
         points = points[masks.any(-1)]
+    metrics = {}
 
     if training:
         # boxes_lidar = gt_dict["gt_boxes"]
@@ -184,6 +188,11 @@ def prep_pointcloud(input_dict,
             keep_mask = np.logical_not(remove_mask)
             _dict_select(gt_dict, keep_mask)
         gt_dict.pop("difficulty")
+        if min_points_in_gt > 0:
+            # points_count_rbbox takes 10ms with 10 sweeps nuscenes data
+            point_counts = box_np_ops.points_count_rbbox(points, gt_dict["gt_boxes"])
+            mask = point_counts >= min_points_in_gt
+            _dict_select(gt_dict, mask)
         gt_boxes_mask = np.array(
             [n in class_names for n in gt_dict["gt_names"]], dtype=np.bool_)
         if db_sampler is not None:
@@ -245,14 +254,21 @@ def prep_pointcloud(input_dict,
             [class_names.index(n) + 1 for n in gt_dict["gt_names"]],
             dtype=np.int32)
         gt_dict["gt_classes"] = gt_classes
-
+        t1 = time.time()
         gt_dict["gt_boxes"], points = prep.random_flip(gt_dict["gt_boxes"],
                                                        points)
-        gt_dict["gt_boxes"], points = prep.global_rotation(
-            gt_dict["gt_boxes"], points, rotation=global_rotation_noise)
+        metrics["random_filp_time"] = time.time() - t1
+        t1 = time.time()
+        gt_dict["gt_boxes"], points = prep.global_rotation_v2(
+            gt_dict["gt_boxes"], points, *global_rotation_noise)
+        metrics["global_rot_time"] = time.time() - t1
+        t1 = time.time()
         gt_dict["gt_boxes"], points = prep.global_scaling_v2(
             gt_dict["gt_boxes"], points, *global_scaling_noise)
+        metrics["global_scale_time"] = time.time() - t1
+        t1 = time.time()
         prep.global_translate_(gt_dict["gt_boxes"], points, global_translate_noise_std)
+        metrics["global_trans_time"] = time.time() - t1
         bv_range = voxel_generator.point_cloud_range[[0, 1, 3, 4]]
         mask = prep.filter_gt_box_outside_range(gt_dict["gt_boxes"], bv_range)
         _dict_select(gt_dict, mask)
@@ -274,6 +290,7 @@ def prep_pointcloud(input_dict,
     pc_range = voxel_generator.point_cloud_range
     grid_size = voxel_generator.grid_size
     # [352, 400]
+    t1 = time.time()
     if not multi_gpu:
         voxels, coordinates, num_points = voxel_generator.generate(
             points, max_voxels)
@@ -282,11 +299,13 @@ def prep_pointcloud(input_dict,
         voxels, coordinates, num_points, num_voxels = voxel_generator.generate_multi_gpu(
             points, max_voxels)
         num_voxels = np.array([num_voxels], dtype=np.int64)
+    metrics["voxel_gene_time"] = time.time() - t1
     example = {
         'voxels': voxels,
         'num_points': num_points,
         'coordinates': coordinates,
         "num_voxels": num_voxels,
+        "metrics": metrics,
     }
     if calib is not None:
         example["calib"] = calib
@@ -296,13 +315,18 @@ def prep_pointcloud(input_dict,
         anchors = anchor_cache["anchors"]
         anchors_bv = anchor_cache["anchors_bv"]
         anchors_dict = anchor_cache["anchors_dict"]
+        matched_thresholds = anchor_cache["matched_thresholds"]
+        unmatched_thresholds = anchor_cache["unmatched_thresholds"]
+
     else:
         ret = target_assigner.generate_anchors(feature_map_size)
         anchors = ret["anchors"]
-        anchors = anchors.reshape([-1, 7])
+        anchors = anchors.reshape([-1, target_assigner.box_ndim])
         anchors_dict = target_assigner.generate_anchors_dict(feature_map_size)
         anchors_bv = box_np_ops.rbbox2d_to_near_bbox(
             anchors[:, [0, 1, 3, 4, 6]])
+        matched_thresholds = ret["matched_thresholds"]
+        unmatched_thresholds = ret["unmatched_thresholds"]
     example["anchors"] = anchors
     anchors_mask = None
     if anchor_area_threshold >= 0:
@@ -317,24 +341,40 @@ def prep_pointcloud(input_dict,
         anchors_mask = anchors_area > anchor_area_threshold
         # example['anchors_mask'] = anchors_mask.astype(np.uint8)
         example['anchors_mask'] = anchors_mask
+    # print("prep time", time.time() - t)
+    metrics["prep_time"] = time.time() - t
     if not training:
         return example
     # voxel_labels = box_np_ops.assign_label_to_voxel(gt_boxes, coordinates,
     #                                                 voxel_size, coors_range)
-    """
-    example.update({
-        'gt_boxes': gt_boxes.astype(out_dtype),
-        'num_gt': np.array([gt_boxes.shape[0]]),
-        # 'voxel_labels': voxel_labels,
-    })
-    """
     if create_targets:
+        t1 = time.time()
         targets_dict = target_assigner.assign_v2(
             anchors_dict,
             gt_dict["gt_boxes"],
             anchors_mask,
             gt_classes=gt_dict["gt_classes"],
             gt_names=gt_dict["gt_names"])
+        metrics["assign_time"] = time.time() - t1
+        metrics["prep_time"] = time.time() - t
+        """
+        targets_dict = target_assigner.assign(
+            anchors,
+            gt_dict["gt_boxes"],
+            anchors_mask,
+            gt_classes=gt_dict["gt_classes"],
+            # gt_names=gt_dict["gt_names"],
+            matched_thresholds=matched_thresholds,
+            unmatched_thresholds=unmatched_thresholds,)
+        """
+        # boxes_lidar = gt_dict["gt_boxes"]
+        # bev_map = simplevis.nuscene_vis(points, boxes_lidar, gt_dict["gt_names"])
+        # assigned_anchors = anchors[targets_dict['labels'] > 0]
+        # ignored_anchors = anchors[targets_dict['labels'] == -1]
+        # bev_map = simplevis.draw_box_in_bev(bev_map, [-50, -50, 3, 50, 50, 1], ignored_anchors, [128, 128, 128], 2)
+        # bev_map = simplevis.draw_box_in_bev(bev_map, [-50, -50, 3, 50, 50, 1], assigned_anchors, [255, 0, 0])
+        # cv2.imshow('anchors', bev_map)
+        # cv2.waitKey(0)
 
         example.update({
             'labels': targets_dict['labels'],

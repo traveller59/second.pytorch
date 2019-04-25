@@ -247,16 +247,31 @@ class RPNBase(nn.Module):
                 stride=layer_strides[i])
             blocks.append(block)
             if i - self._upsample_start_idx >= 0:
-                deblock = nn.Sequential(
-                    ConvTranspose2d(
-                        num_out_filters,
-                        num_upsample_filters[i - self._upsample_start_idx],
-                        upsample_strides[i - self._upsample_start_idx],
-                        stride=upsample_strides[i - self._upsample_start_idx]),
-                    BatchNorm2d(
-                        num_upsample_filters[i - self._upsample_start_idx]),
-                    nn.ReLU(),
-                )
+                stride = upsample_strides[i - self._upsample_start_idx]
+                if stride >= 1:
+                    stride = np.round(stride).astype(np.int64)
+                    deblock = nn.Sequential(
+                        ConvTranspose2d(
+                            num_out_filters,
+                            num_upsample_filters[i - self._upsample_start_idx],
+                            stride,
+                            stride=stride),
+                        BatchNorm2d(
+                            num_upsample_filters[i - self._upsample_start_idx]),
+                        nn.ReLU(),
+                    )
+                else:
+                    stride = np.round(1 / stride).astype(np.int64)
+                    deblock = nn.Sequential(
+                        Conv2d(
+                            num_out_filters,
+                            num_upsample_filters[i - self._upsample_start_idx],
+                            stride,
+                            stride=stride),
+                        BatchNorm2d(
+                            num_upsample_filters[i - self._upsample_start_idx]),
+                        nn.ReLU(),
+                    )
                 deblocks.append(deblock)
         self.blocks = nn.ModuleList(blocks)
         self.deblocks = nn.ModuleList(deblocks)

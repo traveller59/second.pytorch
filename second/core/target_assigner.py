@@ -3,18 +3,20 @@ from collections import OrderedDict
 
 from second.core import box_np_ops, region_similarity
 from second.core.target_ops import create_target_np
-
+from second.utils.timer import simple_timer
 
 class TargetAssigner:
     def __init__(self,
                  box_coder,
                  anchor_generators,
-                 region_similarity_calculator=None,
                  positive_fraction=None,
+                 region_similarity_calculators=None,
                  sample_size=512):
-        self._region_similarity_calculator = region_similarity_calculator
         self._box_coder = box_coder
         self._anchor_generators = anchor_generators
+        self._sim_calcs = region_similarity_calculators
+        box_ndims = [a.ndim for a in anchor_generators]
+        assert all([e == box_ndims[0] for e in box_ndims])
         self._positive_fraction = positive_fraction
         self._sample_size = sample_size
 
@@ -41,7 +43,7 @@ class TargetAssigner:
         def similarity_fn(anchors, gt_boxes):
             anchors_rbv = anchors[:, [0, 1, 3, 4, 6]]
             gt_boxes_rbv = gt_boxes[:, [0, 1, 3, 4, 6]]
-            return self._region_similarity_calculator.compare(
+            return self._sim_calcs[0].compare(
                 anchors_rbv, gt_boxes_rbv)
 
         def box_encoding_fn(boxes, anchors):
@@ -49,11 +51,11 @@ class TargetAssigner:
 
         return create_target_np(
             anchors,
-            gt_boxes[gt_classes == class_name],
+            gt_boxes,
             similarity_fn,
             box_encoding_fn,
             prune_anchor_fn=prune_anchor_fn,
-            gt_classes=gt_classes[gt_classes == class_name],
+            gt_classes=gt_classes,
             matched_threshold=matched_thresholds,
             unmatched_threshold=unmatched_thresholds,
             positive_fraction=self._positive_fraction,
@@ -67,19 +69,22 @@ class TargetAssigner:
                   anchors_mask=None,
                   gt_classes=None,
                   gt_names=None):
-        def similarity_fn(anchors, gt_boxes):
-            anchors_rbv = anchors[:, [0, 1, 3, 4, 6]]
-            gt_boxes_rbv = gt_boxes[:, [0, 1, 3, 4, 6]]
-            return self._region_similarity_calculator.compare(
-                anchors_rbv, gt_boxes_rbv)
-
+        """this function assign target individally for each class.
+        recommend for multi-class network.
+        """
         def box_encoding_fn(boxes, anchors):
             return self._box_coder.encode(boxes, anchors)
 
         targets_list = []
         anchor_loc_idx = 0
-
+        anchor_gene_idx = 0
         for class_name, anchor_dict in anchors_dict.items():
+            def similarity_fn(anchors, gt_boxes):
+                anchors_rbv = anchors[:, [0, 1, 3, 4, 6]]
+                gt_boxes_rbv = gt_boxes[:, [0, 1, 3, 4, 6]]
+                return self._sim_calcs[anchor_gene_idx].compare(
+                    anchors_rbv, gt_boxes_rbv)
+
             mask = np.array([c == class_name for c in gt_names],
                             dtype=np.bool_)
             feature_map_size = anchor_dict["anchors"].shape[:3]
@@ -91,9 +96,9 @@ class TargetAssigner:
                 prune_anchor_fn = lambda _: np.where(anchors_mask_class)[0]
             else:
                 prune_anchor_fn = None
-
+            # print(f"num of {class_name}:", np.sum(mask))
             targets = create_target_np(
-                anchor_dict["anchors"].reshape(-1, 7),
+                anchor_dict["anchors"].reshape(-1, self.box_ndim),
                 gt_boxes[mask],
                 similarity_fn,
                 box_encoding_fn,
@@ -105,8 +110,10 @@ class TargetAssigner:
                 rpn_batch_size=self._sample_size,
                 norm_by_num_examples=False,
                 box_code_size=self.box_coder.code_size)
+            # print(f"num of positive:", np.sum(targets["labels"] == self.classes.index(class_name) + 1))
             anchor_loc_idx += num_loc
             targets_list.append(targets)
+            anchor_gene_idx += 1
 
         targets_dict = {
             "labels": [t["labels"] for t in targets_list],
@@ -127,8 +134,7 @@ class TargetAssigner:
         targets_dict["bbox_outside_weights"] = np.concatenate([
             v.reshape(*feature_map_size, -1)
             for v in targets_dict["bbox_outside_weights"]
-        ],
-                                                              axis=-1)
+        ], axis=-1)
         targets_dict["labels"] = targets_dict["labels"].reshape(-1)
         targets_dict["bbox_outside_weights"] = targets_dict[
             "bbox_outside_weights"].reshape(-1)
@@ -148,7 +154,7 @@ class TargetAssigner:
                 self._anchor_generators, matched_thresholds,
                 unmatched_thresholds):
             anchors = anchor_generator.generate(feature_map_size)
-            anchors = anchors.reshape([*anchors.shape[:3], -1, 7])
+            anchors = anchors.reshape([*anchors.shape[:3], -1, self.box_ndim])
             anchors_list.append(anchors)
             num_anchors = np.prod(anchors.shape[:-1])
             match_list.append(
@@ -180,7 +186,7 @@ class TargetAssigner:
                 self._anchor_generators, matched_thresholds,
                 unmatched_thresholds):
             anchors = anchor_generator.generate(feature_map_size)
-            anchors = anchors.reshape([*anchors.shape[:3], -1, 7])
+            anchors = anchors.reshape([*anchors.shape[:3], -1, self.box_ndim])
             anchors_list.append(anchors)
             num_anchors = np.prod(anchors.shape[:-1])
             match_list.append(
@@ -199,3 +205,7 @@ class TargetAssigner:
         for a_generator in self._anchor_generators:
             num += a_generator.num_anchors_per_localization
         return num
+
+    @property 
+    def box_ndim(self):
+        return self._anchor_generators[0].ndim

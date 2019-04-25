@@ -120,7 +120,8 @@ def image_box_overlap(boxes, query_boxes, criterion=-1):
 
 
 def bev_box_overlap(boxes, qboxes, criterion=-1, stable=True):
-    riou = box_np_ops.riou_cc(boxes, qboxes)
+    # riou = box_np_ops.riou_cc(boxes, qboxes)
+    riou = rotate_iou_gpu_eval(boxes, qboxes, criterion)
     return riou
 
 
@@ -168,8 +169,11 @@ def box3d_overlap(boxes, qboxes, criterion=-1, z_axis=1, z_center=1.0):
     bev_axes = list(range(7))
     bev_axes.pop(z_axis + 3)
     bev_axes.pop(z_axis)
-    rinc = box_np_ops.rinter_cc(boxes[:, bev_axes], qboxes[:, bev_axes])
-    # rinc = rotate_iou_gpu_eval(boxes[:, bev_axes], qboxes[:, bev_axes], 2)
+    
+    # t = time.time()
+    # rinc = box_np_ops.rinter_cc(boxes[:, bev_axes], qboxes[:, bev_axes])
+    rinc = rotate_iou_gpu_eval(boxes[:, bev_axes], qboxes[:, bev_axes], 2)
+    # print("riou time", time.time() - t)
     box3d_overlap_kernel(boxes, qboxes, rinc, criterion, z_axis, z_center)
     return rinc
 
