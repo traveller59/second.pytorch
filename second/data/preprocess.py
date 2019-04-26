@@ -23,7 +23,7 @@ def merge_second_batch(batch_list):
     ret = {}
     for key, elems in example_merged.items():
         if key in [
-                'voxels', 'num_points', 'num_gt', 'gt_boxes', 'voxel_labels'
+                'voxels', 'num_points', 'num_gt', 'voxel_labels', 'gt_names', 'gt_classes', 'gt_boxes'
         ]:
             ret[key] = np.concatenate(elems, axis=0)
         elif key == 'metadata':
@@ -77,8 +77,11 @@ def merge_second_batch_multigpu(batch_list):
                     coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
                 coors.append(coor_pad)
             ret[key] = np.stack(coors, axis=0)
+        elif key in ['gt_names', 'gt_classes', 'gt_boxes']:
+            continue
         else:
             ret[key] = np.stack(elems, axis=0)
+        
     return ret
 
 
@@ -345,6 +348,7 @@ def prep_pointcloud(input_dict,
     metrics["prep_time"] = time.time() - t
     if not training:
         return example
+    example["gt_names"] = gt_dict["gt_names"]
     # voxel_labels = box_np_ops.assign_label_to_voxel(gt_boxes, coordinates,
     #                                                 voxel_size, coors_range)
     if create_targets:
@@ -367,15 +371,17 @@ def prep_pointcloud(input_dict,
             matched_thresholds=matched_thresholds,
             unmatched_thresholds=unmatched_thresholds,)
         """
-        # boxes_lidar = gt_dict["gt_boxes"]
-        # bev_map = simplevis.nuscene_vis(points, boxes_lidar, gt_dict["gt_names"])
-        # assigned_anchors = anchors[targets_dict['labels'] > 0]
-        # ignored_anchors = anchors[targets_dict['labels'] == -1]
-        # bev_map = simplevis.draw_box_in_bev(bev_map, [-50, -50, 3, 50, 50, 1], ignored_anchors, [128, 128, 128], 2)
-        # bev_map = simplevis.draw_box_in_bev(bev_map, [-50, -50, 3, 50, 50, 1], assigned_anchors, [255, 0, 0])
-        # cv2.imshow('anchors', bev_map)
-        # cv2.waitKey(0)
-
+        """
+        if "trailer" in gt_dict["gt_names"]:
+            boxes_lidar = gt_dict["gt_boxes"]
+            bev_map = simplevis.nuscene_vis(points, boxes_lidar, gt_dict["gt_names"])
+            assigned_anchors = anchors[targets_dict['labels'] > 0]
+            ignored_anchors = anchors[targets_dict['labels'] == -1]
+            bev_map = simplevis.draw_box_in_bev(bev_map, [-50, -50, 3, 50, 50, 1], ignored_anchors, [128, 128, 128], 2)
+            bev_map = simplevis.draw_box_in_bev(bev_map, [-50, -50, 3, 50, 50, 1], assigned_anchors, [255, 0, 0])
+            cv2.imshow('anchors', bev_map)
+            cv2.waitKey(0)
+        """
         example.update({
             'labels': targets_dict['labels'],
             'reg_targets': targets_dict['bbox_targets'],

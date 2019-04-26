@@ -145,7 +145,7 @@ class WeightedSmoothL1LocalizationLoss(Loss):
     self._sigma = sigma
     if code_weights is not None:
       self._code_weights = np.array(code_weights, dtype=np.float32)
-      self._code_weights = Variable(torch.from_numpy(self._code_weights).cuda())
+      self._code_weights = torch.from_numpy(self._code_weights)
     else:
       self._code_weights = None
     self._codewise = codewise
@@ -165,7 +165,7 @@ class WeightedSmoothL1LocalizationLoss(Loss):
     """
     diff = prediction_tensor - target_tensor
     if self._code_weights is not None:
-      code_weights = self._code_weights.type_as(prediction_tensor)
+      code_weights = self._code_weights.type_as(prediction_tensor).to(target_tensor.device)
       diff = code_weights.view(1, 1, -1) * diff
     abs_diff = torch.abs(diff)
     abs_diff_lt_1 = torch.le(abs_diff, 1 / (self._sigma**2)).type_as(abs_diff)
@@ -185,6 +185,7 @@ def _sigmoid_cross_entropy_with_logits(logits, labels):
   # to be compatible with tensorflow, we don't use ignore_idx
   loss = torch.clamp(logits, min=0) - logits * labels.type_as(logits)
   loss += torch.log1p(torch.exp(-torch.abs(logits)))
+  # loss = nn.BCEWithLogitsLoss(reduce="none")(logits, labels.type_as(logits))
   # transpose_param = [0] + [param[-1]] + param[1:-1]
   # logits = logits.permute(*transpose_param)
   # loss_ftor = nn.NLLLoss(reduce=False)

@@ -20,7 +20,7 @@
 
 2. change ```size``` and z-center in ```anchor_ranges``` in ```anchor_generator_range```.
 
-3. choose thresholds, add some print function in target assigner code and train some steps to see if the threshold is too large or too small. Then tune them.
+3. choose thresholds: use ```helper_tune_target_assigner``` to get instance count and assigned anchors count. Then tune them.
 
 4. add ```region_similarity_calculator```. If your anchors are too sparse, you need to use ```distance_similarity``` instead of ```nearest_iou_similarity``` for small classes such as pedestrian.
 

@@ -537,5 +537,68 @@ def evaluate(config_path,
             print("Evaluation {}".format(k))
             print(v)
 
+def helper_tune_target_assigner(config_path):
+    """get information of target assign to tune thresholds in anchor generator.
+    """    
+    if isinstance(config_path, str):
+        # directly provide a config object. this usually used
+        # when you want to train with several different parameters in
+        # one script.
+        config = pipeline_pb2.TrainEvalPipelineConfig()
+        with open(config_path, "r") as f:
+            proto_str = f.read()
+            text_format.Merge(proto_str, config)
+    else:
+        config = config_path
+        proto_str = text_format.MessageToString(config, indent=2)
+
+    input_cfg = config.train_input_reader
+    eval_input_cfg = config.eval_input_reader
+    model_cfg = config.model.second
+    train_cfg = config.train_config
+
+    net = build_network(model_cfg, False)
+    # if train_cfg.enable_mixed_precision:
+    #     net.half()
+    #     net.metrics_to_float()
+    #     net.convert_norm_to_float(net)
+    target_assigner = net.target_assigner
+    voxel_generator = net.voxel_generator
+    dataset = input_reader_builder.build(
+        input_cfg,
+        model_cfg,
+        training=True,
+        voxel_generator=voxel_generator,
+        target_assigner=target_assigner,
+        multi_gpu=False)
+
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=1,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=False,
+        collate_fn=merge_second_batch,
+        worker_init_fn=_worker_init_fn,
+        drop_last=False)
+    
+    class_count = {}
+    anchor_count = {}
+    for c in target_assigner.classes:
+        class_count[c] = 0
+        anchor_count[c] = 0
+
+    for example in dataloader:
+        gt_names = example["gt_names"]
+        for name in gt_names:
+            class_count[name] += 1
+        
+        labels = example['labels']
+        for i in range(1, len(target_assigner.classes) + 1):
+            anchor_count[target_assigner.classes[i - 1]] += int(np.sum(labels == i))
+    
+    print(json.dumps(class_count, indent=2))
+    print(json.dumps(anchor_count, indent=2))
+
 if __name__ == '__main__':
     fire.Fire()
