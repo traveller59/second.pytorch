@@ -44,3 +44,55 @@ Use ```set_train_step``` in utils.config_tool.train if you don't want to calcula
 
 * use code such as code in script_server.py instead of use commands in terminal.
 
+
+## Reference Performance
+
+* all.pp.lowa.config: 30 epoch, 1/2 dataset, train speed: 12 sample/s
+
+```
+car Nusc dist AP@0.5, 1.0, 2.0, 4.0
+58.85, 76.12, 80.65, 82.49
+bicycle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.00, 0.00, 0.00, 0.00
+bus Nusc dist AP@0.5, 1.0, 2.0, 4.0
+2.55, 15.42, 27.19, 32.03
+construction_vehicle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.00, 0.00, 0.02, 0.31
+motorcycle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+8.61, 14.30, 15.00, 15.53
+pedestrian Nusc dist AP@0.5, 1.0, 2.0, 4.0
+39.14, 49.29, 53.50, 57.03
+traffic_cone Nusc dist AP@0.5, 1.0, 2.0, 4.0
+12.58, 18.92, 22.79, 27.99
+trailer Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.00, 1.10, 7.42, 20.91
+truck Nusc dist AP@0.5, 1.0, 2.0, 4.0
+5.44, 15.78, 22.77, 27.05
+barrier Nusc dist AP@0.5, 1.0, 2.0, 4.0
+7.54, 34.54, 44.52, 49.80
+```
+
+* all.pp.config: 50 epoch, 1/8 dataset, train speed: 4 sample/s
+
+```
+car Nusc dist AP@0.5, 1.0, 2.0, 4.0
+58.85, 76.12, 80.65, 82.49
+bicycle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.00, 0.00, 0.00, 0.00
+bus Nusc dist AP@0.5, 1.0, 2.0, 4.0
+2.55, 15.42, 27.19, 32.03
+construction_vehicle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.00, 0.00, 0.02, 0.31
+motorcycle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+8.61, 14.30, 15.00, 15.53
+pedestrian Nusc dist AP@0.5, 1.0, 2.0, 4.0
+39.14, 49.29, 53.50, 57.03
+traffic_cone Nusc dist AP@0.5, 1.0, 2.0, 4.0
+12.58, 18.92, 22.79, 27.99
+trailer Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.00, 1.10, 7.42, 20.91
+truck Nusc dist AP@0.5, 1.0, 2.0, 4.0
+5.44, 15.78, 22.77, 27.05
+barrier Nusc dist AP@0.5, 1.0, 2.0, 4.0
+7.54, 34.54, 44.52, 49.80
+```

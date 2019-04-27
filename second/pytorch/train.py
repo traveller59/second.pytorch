@@ -308,8 +308,8 @@ def train(config_path,
                 loss = ret_dict["loss"].mean()
                 cls_loss_reduced = ret_dict["cls_loss_reduced"].mean()
                 loc_loss_reduced = ret_dict["loc_loss_reduced"].mean()
-                cls_pos_loss = ret_dict["cls_pos_loss"]
-                cls_neg_loss = ret_dict["cls_neg_loss"]
+                cls_pos_loss = ret_dict["cls_pos_loss"].mean()
+                cls_neg_loss = ret_dict["cls_neg_loss"].mean()
                 loc_loss = ret_dict["loc_loss"]
                 cls_loss = ret_dict["cls_loss"]
                 

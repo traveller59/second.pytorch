@@ -105,7 +105,7 @@ class WeightedL2LocalizationLoss(Loss):
     super().__init__()
     if code_weights is not None:
       self._code_weights = np.array(code_weights, dtype=np.float32)
-      self._code_weights = Variable(torch.from_numpy(self._code_weights).cuda())
+      self._code_weights = torch.from_numpy(self._code_weights)
     else:
       self._code_weights = None
 
@@ -125,7 +125,7 @@ class WeightedL2LocalizationLoss(Loss):
     """
     diff = prediction_tensor - target_tensor
     if self._code_weights is not None:
-      self._code_weights = self._code_weights.type_as(prediction_tensor)
+      self._code_weights = self._code_weights.type_as(prediction_tensor).to(target_tensor.device)
       self._code_weights = self._code_weights.view(1, 1, -1)
       diff = self._code_weights * diff
     weighted_diff = diff * weights.unsqueeze(-1)
