@@ -117,9 +117,9 @@ class TargetAssigner:
             feature_map_size = anchor_dict["anchors"].shape[:3]
             num_loc = anchor_dict["anchors"].shape[-2]
             if anchors_mask is not None:
-                anchors_mask = anchors_mask.reshape(*feature_map_size, -1)
-                anchors_mask_class = anchors_mask[
-                    ..., anchor_loc_idx:anchor_loc_idx + num_loc].reshape(-1)
+                anchors_mask = anchors_mask.reshape(-1)
+                a_range = self.anchors_range(class_name)
+                anchors_mask_class = anchors_mask[a_range[0]:a_range[1]].reshape(-1)
                 prune_anchor_fn = lambda _: np.where(anchors_mask_class)[0]
             else:
                 prune_anchor_fn = None

@@ -27,17 +27,17 @@ class SmallObjectHead(nn.Module):
             num_cls = num_anchor_per_loc * (num_class + 1)
 
         self.net = nn.Sequential(
-            nn.Conv2d(num_filters, 128, 3, bias=False, padding=1),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(num_filters, 64, 3, bias=False, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.Conv2d(128, 128, 3, bias=False, padding=1),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(64, 64, 3, bias=False, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.Conv2d(128, 128, 3, bias=False, padding=1),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(64, 64, 3, bias=False, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
         )
-        final_num_filters = 128
+        final_num_filters = 64
         self.conv_cls = nn.Conv2d(final_num_filters, num_cls, 1)
         self.conv_box = nn.Conv2d(final_num_filters,
                                   num_anchor_per_loc * box_code_size, 1)
@@ -59,15 +59,15 @@ class SmallObjectHead(nn.Module):
                                    self._num_class, H, W).permute(
                                        0, 1, 3, 4, 2).contiguous()
         ret_dict = {
-            "box_preds": box_preds,# .view(batch_size, -1, self._box_code_size),
-            "cls_preds": cls_preds,# .view(batch_size, -1, self._num_class),
+            "box_preds": box_preds.view(batch_size, -1, self._box_code_size),
+            "cls_preds": cls_preds.view(batch_size, -1, self._num_class),
         }
         if self._use_direction_classifier:
             dir_cls_preds = self.conv_dir_cls(x)
             dir_cls_preds = dir_cls_preds.view(
                 -1, self._num_anchor_per_loc, self._num_direction_bins, H,
                 W).permute(0, 1, 3, 4, 2).contiguous()
-            ret_dict["dir_cls_preds"] = dir_cls_preds# .view(batch_size, -1, self._num_direction_bins)
+            ret_dict["dir_cls_preds"] = dir_cls_preds.view(batch_size, -1, self._num_direction_bins)
         return ret_dict
 
 
@@ -107,15 +107,15 @@ class DefaultHead(nn.Module):
                                    self._num_class, H, W).permute(
                                        0, 1, 3, 4, 2).contiguous()
         ret_dict = {
-            "box_preds": box_preds,# .view(batch_size, -1, self._box_code_size),
-            "cls_preds": cls_preds,# .view(batch_size, -1, self._num_class),
+            "box_preds": box_preds.view(batch_size, -1, self._box_code_size),
+            "cls_preds": cls_preds.view(batch_size, -1, self._num_class),
         }
         if self._use_direction_classifier:
             dir_cls_preds = self.conv_dir_cls(x)
             dir_cls_preds = dir_cls_preds.view(
                 -1, self._num_anchor_per_loc, self._num_direction_bins, H,
                 W).permute(0, 1, 3, 4, 2).contiguous()
-            ret_dict["dir_cls_preds"] = dir_cls_preds# .view(batch_size, -1, self._num_direction_bins)
+            ret_dict["dir_cls_preds"] = dir_cls_preds.view(batch_size, -1, self._num_direction_bins)
         return ret_dict
 
 @register_voxelnet

@@ -28,8 +28,8 @@ message TargetAssigner {
   float sample_positive_fraction = 2;
   uint32 sample_size = 3;
   bool assign_per_class = 4;
-  int64 nms_pre_max_sizes = 5; // this will override setting in ClassSettings if provide.
-  int64 nms_post_max_sizes = 6; // this will override setting in ClassSettings if provide.
-  int64 nms_score_thresholds = 7; // this will override setting in ClassSettings if provide.
-  int64 nms_iou_thresholds = 8; // this will override setting in ClassSettings if provide.
+  repeated int64 nms_pre_max_sizes = 5; // this will override setting in ClassSettings if provide.
+  repeated int64 nms_post_max_sizes = 6; // this will override setting in ClassSettings if provide.
+  repeated int64 nms_score_thresholds = 7; // this will override setting in ClassSettings if provide.
+  repeated int64 nms_iou_thresholds = 8; // this will override setting in ClassSettings if provide.
 }

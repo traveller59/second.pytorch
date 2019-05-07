@@ -102,7 +102,7 @@ Follow instructions in [spconv](https://github.com/traveller59/spconv) to instal
 
 If you want to train with fp16 mixed precision (train faster in RTX series, Titan V/RTX and Tesla V100, but I only have 1080Ti), you need to install [apex](https://github.com/NVIDIA/apex).
 
-If you want to use NuScenes dataset, you need to install [nuscenes-devkit](https://github.com/nutonomy/nuscenes-devkit), I recommend to copy nuscenes in python-sdk to second/.. folder (equalivent to add it to PYTHONPATH) and manually install its dependencies, use pip to install devkit will install many fixed-version library.
+If you want to use NuScenes dataset, you need to install [nuscenes-devkit](https://github.com/nutonomy/nuscenes-devkit).
 
 ### 3. Setup cuda for numba (will be removed in 1.6.0 release)
 
@@ -162,7 +162,9 @@ Then run
 ```bash
 python create_data.py nuscenes_data_prep --data_path=NUSCENES_TRAINVAL_DATASET_ROOT --version="v1.0-trainval" --max_sweeps=10
 python create_data.py nuscenes_data_prep --data_path=NUSCENES_TEST_DATASET_ROOT --version="v1.0-test" --max_sweeps=10
+--dataset_name="NuscenesDataset"
 ```
+This will create gt database **without velocity**. to add velocity, use dataset name ```NuscenesDatasetVelo```.
 
 * Modify config file
 

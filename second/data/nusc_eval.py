@@ -12,7 +12,7 @@ def eval_main(root_path, version, eval_version, res_path, eval_set, output_dir):
     nusc_eval = NuScenesEval(nusc, config=cfg, result_path=res_path, eval_set=eval_set, 
                             output_dir=output_dir,
                             verbose=False)
-    _, _ = nusc_eval.run()
+    nusc_eval.main(render_curves=False)
 
 if __name__ == "__main__":
     fire.Fire(eval_main)

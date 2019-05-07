@@ -60,7 +60,7 @@ def build(input_reader_config,
     cfg = input_reader_config
     db_sampler_cfg = prep_cfg.database_sampler
     db_sampler = None
-    if len(db_sampler_cfg.sample_groups) > 0:  # enable sample
+    if len(db_sampler_cfg.sample_groups) > 0 or db_sampler_cfg.database_info_path != "":  # enable sample
         db_sampler = dbsampler_builder.build(db_sampler_cfg)
     grid_size = voxel_generator.grid_size
     feature_map_size = grid_size[:2] // out_size_factor

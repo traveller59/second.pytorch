@@ -65,6 +65,10 @@ class AnchorGeneratorStride(AnchorGenerator):
     def ndim(self):
         return 7 + len(self._custom_values)
 
+    @property 
+    def custom_ndim(self):
+        return len(self._custom_values)
+
 class AnchorGeneratorRange(AnchorGenerator):
     def __init__(self,
                  anchor_ranges,
