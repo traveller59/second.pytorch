@@ -13,12 +13,12 @@ import numpy as np
 from second.core import box_np_ops
 from second.core import preprocess as prep
 from second.data import kitti_common as kitti
-from second.data.dataset import Dataset
+from second.data.dataset import Dataset, register_dataset
 from second.utils.eval import get_coco_eval_result, get_official_eval_result
 from second.utils.progress_bar import progress_bar_iter as prog_bar
 from second.utils.timer import simple_timer
 
-
+@register_dataset
 class NuScenesDataset(Dataset):
     NumPointFeatures = 4  # xyz, timestamp. set 4 to use kitti pretrain
     NameMapping = {
@@ -37,7 +37,18 @@ class NuScenesDataset(Dataset):
         'vehicle.trailer': 'trailer',
         'vehicle.truck': 'truck'
     }
-
+    DefaultAttribute = {
+        "car": "vehicle.parked",
+        "pedestrian": "pedestrian.moving",
+        "trailer": "vehicle.parked",
+        "truck": "vehicle.parked",
+        "bus": "vehicle.parked",
+        "motorcycle": "cycle.without_rider",
+        "construction_vehicle": "vehicle.parked",
+        "bicycle": "cycle.without_rider",
+        "barrier": "",
+        "traffic_cone": "",
+    }
     def __init__(self,
                  root_path,
                  info_path,
@@ -48,6 +59,8 @@ class NuScenesDataset(Dataset):
         with open(info_path, 'rb') as f:
             data = pickle.load(f)
         self._nusc_infos = data["infos"]
+        self._nusc_infos = list(
+            sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
         self._metadata = data["metadata"]
         self._class_names = class_names
         self._prep_func = prep_func
@@ -292,7 +305,7 @@ class NuScenesDataset(Dataset):
     def evaluation_nusc(self, detections, output_dir):
         version = self.version
         eval_set_map = {
-            "v1.0-mini": "mini_val",
+            "v1.0-mini": "mini_train",
             "v1.0-trainval": "val",
         }
         gt_annos = self.ground_truth_annotations
@@ -326,7 +339,7 @@ class NuScenesDataset(Dataset):
                     "velocity": velocity,
                     "detection_name": name,
                     "detection_score": box.score,
-                    "attribute_name": '',
+                    "attribute_name": NuScenesDataset.DefaultAttribute[name],
                 }
                 annos.append(nusc_anno)
             nusc_annos[det["metadata"]["token"]] = annos
@@ -351,18 +364,18 @@ class NuScenesDataset(Dataset):
             for k, v in metrics["label_aps"][name].items():
                 detail[name][f"dist@{k}"] = v
             tp_errs = []
+            tp_names = []
             for k, v in metrics["label_tp_errors"][name].items():
                 detail[name][k] = v
-                tp_errs.append(f"{k}={v:.4f}")
-
+                tp_errs.append(f"{v:.4f}")
+                tp_names.append(k)
             threshs = ', '.join(list(metrics["label_aps"][name].keys()))
             scores = list(metrics["label_aps"][name].values())
             scores = ', '.join([f"{s * 100:.2f}" for s in scores])
-            result += f"{name} Nusc dist AP@{threshs}\n"
+            result += f"{name} Nusc dist AP@{threshs} and TP errors\n"
             result += scores
             result += "\n"
-            result += f"{name} Nusc TP errors\n"
-            result += '\n'.join(tp_errs)
+            result += ', '.join(tp_names) + ": " + ', '.join(tp_errs)
             result += "\n"
         return {
             "results": {
@@ -394,7 +407,7 @@ class NuScenesDataset(Dataset):
         }
         return res
 
-
+@register_dataset
 class NuScenesDatasetD8(NuScenesDataset):
     """Nuscenes mini train set. only contains ~3500 samples.
     recommend to use this to develop, train full set once before submit.
@@ -406,6 +419,7 @@ class NuScenesDatasetD8(NuScenesDataset):
                 sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
             self._nusc_infos = self._nusc_infos[::8]
 
+@register_dataset
 class NuScenesDatasetD8Velo(NuScenesDatasetD8):
     """Nuscenes mini train set with velocity.
     """
@@ -413,11 +427,13 @@ class NuScenesDatasetD8Velo(NuScenesDatasetD8):
         super().__init__(*args, **kw)
         self._with_velocity = True
 
+@register_dataset
 class NuScenesDatasetVelo(NuScenesDataset):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self._with_velocity = True
 
+@register_dataset
 class NuScenesDatasetD7(NuScenesDataset):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -426,7 +442,7 @@ class NuScenesDatasetD7(NuScenesDataset):
                 sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
             self._nusc_infos = self._nusc_infos[::7]
 
-
+@register_dataset
 class NuScenesDatasetD6(NuScenesDataset):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -435,7 +451,7 @@ class NuScenesDatasetD6(NuScenesDataset):
                 sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
             self._nusc_infos = self._nusc_infos[::6]
 
-
+@register_dataset
 class NuScenesDatasetD5(NuScenesDataset):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -444,7 +460,7 @@ class NuScenesDatasetD5(NuScenesDataset):
                 sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
             self._nusc_infos = self._nusc_infos[::5]
 
-
+@register_dataset
 class NuScenesDatasetD4(NuScenesDataset):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -453,7 +469,7 @@ class NuScenesDatasetD4(NuScenesDataset):
                 sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
             self._nusc_infos = self._nusc_infos[::4]
 
-
+@register_dataset
 class NuScenesDatasetD3(NuScenesDataset):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -462,7 +478,7 @@ class NuScenesDatasetD3(NuScenesDataset):
                 sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
             self._nusc_infos = self._nusc_infos[::3]
 
-
+@register_dataset
 class NuScenesDatasetD2(NuScenesDataset):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -471,6 +487,11 @@ class NuScenesDatasetD2(NuScenesDataset):
                 sorted(self._nusc_infos, key=lambda e: e["timestamp"]))
             self._nusc_infos = self._nusc_infos[::2]
 
+@register_dataset
+class NuScenesDatasetD2Velo(NuScenesDatasetD2):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self._with_velocity = True
 
 def _second_det_to_nusc_box(detection):
     from nuscenes.utils.data_classes import Box
@@ -485,6 +506,9 @@ def _second_det_to_nusc_box(detection):
         velocity = (np.nan, np.nan, np.nan)
         if box3d.shape[1] == 9:
             velocity = (*box3d[i, 7:9], 0.0)
+            # velo_val = np.linalg.norm(box3d[i, 7:9])
+            # velo_ori = box3d[i, 6]
+            # velocity = (velo_val * np.cos(velo_ori), velo_val * np.sin(velo_ori), 0.0)
         box = Box(
             box3d[i, :3],
             box3d[i, 3:6],
@@ -655,7 +679,7 @@ def _fill_trainval_infos(nusc,
             info["num_lidar_pts"] = np.array(
                 [a["num_lidar_pts"] for a in annotations])
             info["num_radar_pts"] = np.array(
-                [a["num_lidar_pts"] for a in annotations])
+                [a["num_radar_pts"] for a in annotations])
         if sample["scene_token"] in train_scenes:
             train_nusc_infos.append(info)
         else:
@@ -805,6 +829,56 @@ def render_nusc_result(nusc, results, sample_token):
         boxes.append(box)
     nusc.explorer.render_sample_data(sample["data"]["LIDAR_TOP"], extern_boxes=boxes, nsweeps=10)
     nusc.explorer.render_sample_data(sample["data"]["LIDAR_TOP"], nsweeps=10)
+
+def cluster_trailer_box(info_path, class_name="bus"):
+    with open(info_path, 'rb') as f:
+        nusc_infos = pickle.load(f)["infos"]
+    from nuscenes.eval.detection.config import eval_detection_configs
+    cls_range_map = eval_detection_configs["cvpr_2019"]["class_range"]
+    gt_boxes_list = []  
+    for info in nusc_infos:
+        gt_boxes = info["gt_boxes"]
+        gt_names = info["gt_names"]
+        mask = np.array([s == class_name for s in info["gt_names"]],
+                        dtype=np.bool_)
+        gt_names = gt_names[mask]
+        gt_boxes = gt_boxes[mask]
+        det_range = np.array([cls_range_map[n] for n in gt_names])
+        det_range = det_range[..., np.newaxis] @ np.array([[-1, -1, 1, 1]])
+        mask = (gt_boxes[:, :2] >= det_range[:, :2]).all(1)
+        mask &= (gt_boxes[:, :2] <= det_range[:, 2:]).all(1)
+
+        gt_boxes_list.append(gt_boxes[mask].reshape(-1, 7))
+    gt_boxes_list = np.concatenate(gt_boxes_list, axis=0)
+    trailer_dims = gt_boxes_list[:, 3:6]
+    from sklearn.cluster import DBSCAN
+    from sklearn.preprocessing import StandardScaler
+    X = StandardScaler().fit_transform(trailer_dims)
+    db = DBSCAN(eps=0.3, min_samples=10).fit(X)
+    core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+    core_samples_mask[db.core_sample_indices_] = True
+    labels = db.labels_
+    n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+    n_noise_ = list(labels).count(-1)
+    print(n_clusters_, n_noise_)
+    print(trailer_dims)
+
+    import matplotlib.pyplot as plt 
+    unique_labels = set(labels)
+    colors = [plt.cm.Spectral(each)
+            for each in np.linspace(0, 1, len(unique_labels))]
+    for k, col in zip(unique_labels, colors):
+        if k == -1:
+            # Black used for noise.
+            col = [0, 0, 0, 1]
+        class_member_mask = (labels == k)
+        xy = trailer_dims[class_member_mask & core_samples_mask]
+        plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(col),
+                markeredgecolor='k', markersize=14)
+        xy = trailer_dims[class_member_mask & ~core_samples_mask]
+        plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(col),
+                markeredgecolor='k', markersize=6)
+    plt.show()
 
 if __name__ == "__main__":
     fire.Fire()

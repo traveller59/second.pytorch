@@ -278,9 +278,9 @@ class DataBaseSamplerV2:
             else:
                 if self._enable_global_rot:
                     sampled[i - num_gt]["box3d_lidar"][:2] = boxes[i, :2]
-                    sampled[i - num_gt]["box3d_lidar"][-1] = boxes[i, -1]
+                    sampled[i - num_gt]["box3d_lidar"][6] = boxes[i, 6]
                     sampled[i - num_gt]["rot_transform"] = (
-                        boxes[i, -1] - sp_boxes[i - num_gt, -1])
+                        boxes[i, 6] - sp_boxes[i - num_gt, 6])
                 valid_samples.append(sampled[i - num_gt])
         return valid_samples
 
@@ -343,10 +343,10 @@ class DataBaseSamplerV2:
                         sampled[idx - num_gt +
                                 i]["box3d_lidar"][:2] = boxes[idx + i, :2]
                         sampled[idx - num_gt +
-                                i]["box3d_lidar"][-1] = boxes[idx + i, -1]
+                                i]["box3d_lidar"][6] = boxes[idx + i, 6]
                         sampled[idx - num_gt + i]["rot_transform"] = (
-                            boxes[idx + i, -1] -
-                            sp_boxes[idx + i - num_gt, -1])
+                            boxes[idx + i, 6] -
+                            sp_boxes[idx + i - num_gt, 6])
 
                     valid_samples.append(sampled[idx - num_gt + i])
             idx += num

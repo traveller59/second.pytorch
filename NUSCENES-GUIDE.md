@@ -12,6 +12,10 @@
 
 * Use KITTI pretrain model if possible. You can use a pointpillars xyres_16 car model in [google drive](https://drive.google.com/open?id=1YOpgRkBgmSAJwMknoXmitEArNitZz63C) as pretrained model.
 
+* Multi-class NMS can increase performance of large objects. The parameters of mcnms should be grid-searched, don't enable mcmns during develop.
+
+* Database sample can greatly increase performance of bus. Currently no effect on other class.
+
 ## Config Guide
 
 ### Anchor Generator
@@ -44,10 +48,36 @@ Use ```set_train_step``` in utils.config_tool.train if you don't want to calcula
 
 * use code such as code in script_server.py instead of use commands in terminal.
 
+## Config reference
 
-## Reference Performance
+* all.fhd.config
 
-* all.pp.lowa.config: 30 epoch, 1/2 dataset, train speed: 12 sample/s
+1. Block filtering is enabled by default to decrease number of voxels.
+
+2. Use ```upsample_strides: [0.5]``` to decrease number of anchors and increase training speed.
+
+* all.pp.mhead.config
+
+This config use custom ```VoxelNet``` class.
+
+1. Use ```VoxelNetNuscenesMultiHead``` and write a multi-head network to handle small objects.
+
+2. Output of multi head network MUST match order of class settings in config file.
+
+3. If you use custom VoxelNet class, you MUST set feature_map_size for every class in class settings.
+
+* all.pp.largea.config
+
+This config use only large anchors.
+
+1. you can use ```no_anchor``` to disable anchor generation of a class.
+
+2. you must set ```assign_per_class``` to false when use ```no_anchor```.
+
+
+## Reference Performance (Single GPU)
+
+* all.pp.lowa.config: 30 epoch, 1/2 dataset (NuscenesDatasetD2), train speed: 12 sample/s, ~50000 anchors
 
 ```
 car Nusc dist AP@0.5, 1.0, 2.0, 4.0
@@ -72,27 +102,50 @@ barrier Nusc dist AP@0.5, 1.0, 2.0, 4.0
 7.54, 34.54, 44.52, 49.80
 ```
 
-* all.pp.config: 50 epoch, 1/8 dataset, train speed: 4 sample/s
+* all.pp.mida.config: 30 epoch, 1/2 dataset (NuscenesDatasetD2), train speed: 10 sample/s, ~200000 anchors
 
-```
 car Nusc dist AP@0.5, 1.0, 2.0, 4.0
-58.85, 76.12, 80.65, 82.49
+61.91, 76.75, 80.94, 82.53
 bicycle Nusc dist AP@0.5, 1.0, 2.0, 4.0
 0.00, 0.00, 0.00, 0.00
 bus Nusc dist AP@0.5, 1.0, 2.0, 4.0
-2.55, 15.42, 27.19, 32.03
+8.72, 25.76, 39.13, 42.55
 construction_vehicle Nusc dist AP@0.5, 1.0, 2.0, 4.0
-0.00, 0.00, 0.02, 0.31
+0.00, 0.00, 0.27, 1.18
 motorcycle Nusc dist AP@0.5, 1.0, 2.0, 4.0
-8.61, 14.30, 15.00, 15.53
+12.62, 17.82, 18.31, 18.82
 pedestrian Nusc dist AP@0.5, 1.0, 2.0, 4.0
-39.14, 49.29, 53.50, 57.03
+55.50, 58.74, 61.27, 63.93
 traffic_cone Nusc dist AP@0.5, 1.0, 2.0, 4.0
-12.58, 18.92, 22.79, 27.99
+17.47, 20.30, 23.56, 28.63
 trailer Nusc dist AP@0.5, 1.0, 2.0, 4.0
-0.00, 1.10, 7.42, 20.91
+0.00, 4.76, 18.82, 28.26
 truck Nusc dist AP@0.5, 1.0, 2.0, 4.0
-5.44, 15.78, 22.77, 27.05
+8.39, 20.62, 27.37, 31.12
 barrier Nusc dist AP@0.5, 1.0, 2.0, 4.0
-7.54, 34.54, 44.52, 49.80
+10.61, 31.31, 40.60, 46.33
+
+* all.pp.config: 50 epoch, 1/8 dataset (NuscenesDatasetD8), train speed: 4 sample/s, ~1200000 anchors
+
 ```
+car Nusc dist AP@0.5, 1.0, 2.0, 4.0
+62.90, 73.07, 76.77, 78.79
+bicycle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.00, 0.00, 0.00, 0.00
+bus Nusc dist AP@0.5, 1.0, 2.0, 4.0
+9.53, 26.17, 38.01, 40.60
+construction_vehicle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.00, 0.00, 0.44, 1.43
+motorcycle Nusc dist AP@0.5, 1.0, 2.0, 4.0
+9.25, 12.90, 13.69, 14.11
+pedestrian Nusc dist AP@0.5, 1.0, 2.0, 4.0
+61.44, 62.61, 64.09, 66.35
+traffic_cone Nusc dist AP@0.5, 1.0, 2.0, 4.0
+11.63, 13.14, 15.81, 21.22
+trailer Nusc dist AP@0.5, 1.0, 2.0, 4.0
+0.80, 9.90, 17.61, 23.26
+truck Nusc dist AP@0.5, 1.0, 2.0, 4.0
+9.81, 21.40, 27.55, 30.34
+```
+
+* all.fhd.config: train speed: 5.5 sample/s. comming soon

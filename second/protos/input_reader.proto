@@ -32,6 +32,9 @@ message InputReader {
     Sampler database_sampler = 17;
     bool use_group_id = 18; // this will enable group sample and noise
     int64 min_num_of_points_in_gt = 19; // gt boxes contains less than this will be ignored.
+    bool random_flip_x = 20;
+    bool random_flip_y = 21;
+    float sample_importance = 22;
   }
   Preprocess preprocess = 3;
   uint32 max_num_epochs = 4; // deprecated

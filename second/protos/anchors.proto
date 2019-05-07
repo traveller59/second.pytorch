@@ -1,35 +1,22 @@
 syntax = "proto3";
 
 package second.protos;
-import "second/protos/similarity.proto";
 
 message AnchorGeneratorStride {
-  repeated string class_names = 1;
-  string class_name = 2;
-  repeated float sizes = 3;
-  repeated float strides = 4;
-  repeated float offsets = 5;
-  repeated float rotations = 6;
-  float matched_threshold = 7;
-  float unmatched_threshold = 8;
-  repeated float custom_values = 9;
+  repeated float sizes = 1;
+  repeated float strides = 2;
+  repeated float offsets = 3;
+  repeated float rotations = 4;
+  repeated float custom_values = 5;
 }
 
 message AnchorGeneratorRange {
-  repeated string class_names = 1;
-  string class_name = 2;
-  repeated float sizes = 3;
-  repeated float anchor_ranges = 4;
-  repeated float rotations = 5;
-  float matched_threshold = 6;
-  float unmatched_threshold = 7;
-  repeated float custom_values = 8;
+  repeated float sizes = 1;
+  repeated float anchor_ranges = 2;
+  repeated float rotations = 3;
+  repeated float custom_values = 4;
 }
 
-message AnchorGeneratorCollection {
-  oneof anchor_generator {
-    AnchorGeneratorStride anchor_generator_stride = 1;
-    AnchorGeneratorRange anchor_generator_range = 2;
-  }
-  RegionSimilarityCalculator region_similarity_calculator = 3;
+message NoAnchor {
 }
+

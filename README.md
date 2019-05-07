@@ -1,5 +1,7 @@
-# SECOND for KITTI/NuScenes object detection
+# SECOND for KITTI/NuScenes object detection (1.6.0 Alpha)
 SECOND detector.
+
+"Alpha" means there may be many bugs, config format may change, spconv API may change.
 
 ONLY support python 3.6+, pytorch 1.0.0+. Tested in Ubuntu 16.04/18.04/Windows 10.
 

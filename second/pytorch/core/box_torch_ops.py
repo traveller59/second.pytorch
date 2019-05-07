@@ -367,6 +367,8 @@ def project_to_image(points_3d, proj_mat):
     point_2d_res = point_2d[..., :2] / point_2d[..., 2:3]
     return point_2d_res
 
+def limit_period(val, offset=0.5, period=np.pi):
+    return val - torch.floor(val / period + offset) * period
 
 def camera_to_lidar(points, r_rect, velo2cam):
     num_points = points.shape[0]
@@ -438,7 +440,7 @@ def multiclass_nms(nms_func,
                 class_boxes = class_boxes[class_scores_keep]
             keep = nms_func(class_boxes, class_scores, pre_max_size,
                             post_max_size, iou_threshold)
-            if keep is not None:
+            if keep.shape[0] != 0:
                 if score_thresh > 0.0:
                     selected_per_class.append(class_scores_keep[keep])
                 else:

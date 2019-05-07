@@ -176,3 +176,44 @@ class CosineDecayWithWarmup(_LRSchedulerStep):
                 return pre_cosine_learning_rate
             else:
                 return learning_rate
+
+
+class OneCycle(_LRSchedulerStep):
+    def __init__(self,
+                 optimizer,
+                 total_steps,
+                 lr_max,
+                 moms,
+                 div_factor=25,
+                 pct_start=0.3,
+                 last_step=-1):
+        if total_steps < warmup_steps:
+            raise ValueError('total_steps must be larger or equal to '
+                             'warmup_steps.')
+        self._total_steps = total_steps
+        self._lr_max = lr_max
+        self._moms = moms
+
+        self._warmup_learning_rate = warmup_learning_rate
+        self._warmup_steps = warmup_steps
+
+        super().__init__(optimizer, last_step)
+
+    def _get_lr_per_group(self, base_lr):
+        if base_lr < self._warmup_learning_rate:
+            raise ValueError('learning_rate_base must be larger '
+                             'or equal to warmup_learning_rate.')
+
+        step = self.last_step
+        learning_rate = 0.5 * base_lr * (
+            1 + np.cos(np.pi *
+                       (float(step) - self._warmup_steps
+                        ) / float(self._total_steps - self._warmup_steps)))
+        if self._warmup_steps > 0:
+            slope = (base_lr - self._warmup_learning_rate) / self._warmup_steps
+            pre_cosine_learning_rate = slope * float(
+                step) + self._warmup_learning_rate
+            if step < self._warmup_steps:
+                return pre_cosine_learning_rate
+            else:
+                return learning_rate

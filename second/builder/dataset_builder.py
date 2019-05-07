@@ -23,7 +23,7 @@ that wraps the build function.
 """
 
 from second.protos import input_reader_pb2
-from second.data.all_dataset import get_dataset_class
+from second.data.dataset import get_dataset_class
 from second.data.preprocess import prep_pointcloud
 from second.core import box_np_ops
 import numpy as np
@@ -98,7 +98,10 @@ def build(input_reader_config,
         use_group_id=prep_cfg.use_group_id,
         out_size_factor=out_size_factor,
         multi_gpu=multi_gpu,
-        min_points_in_gt=prep_cfg.min_num_of_points_in_gt)
+        min_points_in_gt=prep_cfg.min_num_of_points_in_gt,
+        random_flip_x=prep_cfg.random_flip_x,
+        random_flip_y=prep_cfg.random_flip_y,
+        sample_importance=prep_cfg.sample_importance)
 
     ret = target_assigner.generate_anchors(feature_map_size)
     class_names = target_assigner.classes
@@ -108,7 +111,7 @@ def build(input_reader_config,
         anchors_list.append(v["anchors"])
     
     # anchors = ret["anchors"]
-    anchors = np.concatenate(anchors_list, axis=-2)
+    anchors = np.concatenate(anchors_list, axis=0)
     anchors = anchors.reshape([-1, target_assigner.box_ndim])
     assert np.allclose(anchors, ret["anchors"].reshape(-1, target_assigner.box_ndim))
     matched_thresholds = ret["matched_thresholds"]
@@ -123,7 +126,6 @@ def build(input_reader_config,
         "anchors_dict": anchors_dict,
     }
     prep_func = partial(prep_func, anchor_cache=anchor_cache)
-
     dataset = dataset_cls(
         info_path=dataset_cfg.kitti_info_path,
         root_path=dataset_cfg.kitti_root_path,

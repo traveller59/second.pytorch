@@ -1,35 +1,42 @@
 import numpy as np
 import math
 from functools import partial
+import torch
+
 
 class LRSchedulerStep(object):
-    def __init__(self, fai_optimizer, total_step, lr_phases,
-                 mom_phases):
+    def __init__(self, fai_optimizer, total_step, lr_phases, mom_phases):
         self.optimizer = fai_optimizer
         self.total_step = total_step
         self.lr_phases = []
-        
+
         for i, (start, lambda_func) in enumerate(lr_phases):
             if len(self.lr_phases) != 0:
                 assert self.lr_phases[-1][0] < int(start * total_step)
             if isinstance(lambda_func, str):
                 lambda_func = eval(lambda_func)
             if i < len(lr_phases) - 1:
-                self.lr_phases.append((int(start * total_step), int(lr_phases[i + 1][0] * total_step), lambda_func))
+                self.lr_phases.append((int(start * total_step),
+                                       int(lr_phases[i + 1][0] * total_step),
+                                       lambda_func))
             else:
-                self.lr_phases.append((int(start * total_step), total_step, lambda_func))
+                self.lr_phases.append((int(start * total_step), total_step,
+                                       lambda_func))
         assert self.lr_phases[0][0] == 0
         self.mom_phases = []
-        
+
         for i, (start, lambda_func) in enumerate(mom_phases):
             if len(self.mom_phases) != 0:
                 assert self.mom_phases[-1][0] < int(start * total_step)
             if isinstance(lambda_func, str):
                 lambda_func = eval(lambda_func)
             if i < len(mom_phases) - 1:
-                self.mom_phases.append((int(start * total_step), int(mom_phases[i + 1][0] * total_step), lambda_func))
+                self.mom_phases.append((int(start * total_step),
+                                        int(mom_phases[i + 1][0] * total_step),
+                                        lambda_func))
             else:
-                self.mom_phases.append((int(start * total_step), total_step, lambda_func))
+                self.mom_phases.append((int(start * total_step), total_step,
+                                        lambda_func))
         if len(mom_phases) > 0:
             assert self.mom_phases[0][0] == 0
 
@@ -48,11 +55,16 @@ class LRSchedulerStep(object):
         if len(moms) > 0:
             self.optimizer.mom = moms[-1]
 
+    @property 
+    def learning_rate(self):
+        return self.optimizer.lr 
+
 def annealing_cos(start, end, pct):
     # print(pct, start, end)
     "Cosine anneal from `start` to `end` as pct goes from 0.0 to 1.0."
     cos_out = np.cos(np.pi * pct) + 1
     return end + (start - end) / 2 * cos_out
+
 
 class OneCycle(LRSchedulerStep):
     def __init__(self, fai_optimizer, total_step, lr_max, moms, div_factor,
@@ -73,12 +85,13 @@ class OneCycle(LRSchedulerStep):
         fai_optimizer.lr, fai_optimizer.mom = low_lr, self.moms[0]
         super().__init__(fai_optimizer, total_step, lr_phases, mom_phases)
 
+
 class ExponentialDecay(LRSchedulerStep):
     def __init__(self,
-                 fai_optimizer, 
+                 fai_optimizer,
                  total_step,
                  initial_learning_rate,
-                 decay_length, 
+                 decay_length,
                  decay_factor,
                  staircase=True):
         """
@@ -104,12 +117,9 @@ class ExponentialDecay(LRSchedulerStep):
             lr_phases.append((0, func))
         super().__init__(fai_optimizer, total_step, lr_phases, [])
 
+
 class ManualStepping(LRSchedulerStep):
-    def __init__(self,
-                 fai_optimizer, 
-                 total_step,
-                 boundaries,
-                 rates):
+    def __init__(self, fai_optimizer, total_step, boundaries, rates):
         assert all([b > 0 and b < 1 for b in boundaries])
         assert len(boundaries) + 1 == len(rates)
         boundaries.insert(0, 0.0)
@@ -125,9 +135,10 @@ class FakeOptim:
         self.lr = 0
         self.mom = 0
 
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    opt = FakeOptim()# 3e-3, wd=0.4, div_factor=10
+    opt = FakeOptim()  # 3e-3, wd=0.4, div_factor=10
     # schd = OneCycle(opt, 100, 3e-3, (0.95, 0.85), 10.0, 0.4)
     schd = ExponentialDecay(opt, 100, 3e-4, 0.1, 0.8, staircase=True)
     schd = ManualStepping(opt, 100, [0.8, 0.9], [0.001, 0.0001, 0.00005])
@@ -137,7 +148,7 @@ if __name__ == "__main__":
         schd.step(i)
         lrs.append(opt.lr)
         moms.append(opt.mom)
-    
+
     plt.plot(lrs)
     # plt.plot(moms)
     # plt.show()

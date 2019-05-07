@@ -746,16 +746,26 @@ def noise_per_object_v2_(gt_boxes,
     box3d_transform_(gt_boxes, loc_transforms, rot_transforms, valid_mask)
 
 
-def random_flip(gt_boxes, points, probability=0.5):
-    enable = np.random.choice([False, True],
+def random_flip(gt_boxes, points, probability=0.5, random_flip_x=True, random_flip_y=True):
+    flip_x = np.random.choice([False, True],
                               replace=False,
                               p=[1 - probability, probability])
-    if enable:
+    flip_y = np.random.choice([False, True],
+                              replace=False,
+                              p=[1 - probability, probability])
+    if flip_y and random_flip_y:
         gt_boxes[:, 1] = -gt_boxes[:, 1]
         gt_boxes[:, 6] = -gt_boxes[:, 6] + np.pi
         if gt_boxes.shape[1] == 9:
             gt_boxes[:, 8] = -gt_boxes[:, 8]
         points[:, 1] = -points[:, 1]
+    if flip_x and random_flip_x:
+        gt_boxes[:, 0] = -gt_boxes[:, 0]
+        gt_boxes[:, 6] = -gt_boxes[:, 6]
+        if gt_boxes.shape[1] == 9:
+            gt_boxes[:, 7] = -gt_boxes[:, 7]
+        points[:, 0] = -points[:, 0]
+
     return gt_boxes, points
 
 

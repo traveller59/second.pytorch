@@ -634,7 +634,8 @@ def create_anchors_3d_range(feature_size,
     sizes = np.tile(sizes, tile_size_shape)
     rets.insert(3, sizes)
     ret = np.concatenate(rets, axis=-1)
-    return np.transpose(ret, [2, 1, 0, 3, 4, 5])
+    res = np.transpose(ret, [2, 1, 0, 3, 4, 5])
+    return res
 
 
 def project_to_image(points_3d, proj_mat):

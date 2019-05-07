@@ -7,14 +7,6 @@ class AnchorGenerator:
         raise NotImplementedError
 
     @property
-    def match_threshold(self):
-        raise NotImplementedError
-
-    @property
-    def unmatch_threshold(self):
-        raise NotImplementedError
-
-    @property
     def num_anchors_per_localization(self):
         raise NotImplementedError
 
@@ -44,21 +36,13 @@ class AnchorGeneratorStride(AnchorGenerator):
         self._rotations = rotations
         self._dtype = dtype
         self._class_name = class_name
-        self._match_threshold = match_threshold
-        self._unmatch_threshold = unmatch_threshold
+        self.match_threshold = match_threshold
+        self.unmatch_threshold = unmatch_threshold
         self._custom_values = custom_values
 
     @property
     def class_name(self):
         return self._class_name
-
-    @property
-    def match_threshold(self):
-        return self._match_threshold
-
-    @property
-    def unmatch_threshold(self):
-        return self._unmatch_threshold
 
     @property
     def num_anchors_per_localization(self):
@@ -97,21 +81,13 @@ class AnchorGeneratorRange(AnchorGenerator):
         self._rotations = rotations
         self._dtype = dtype
         self._class_name = class_name
-        self._match_threshold = match_threshold
-        self._unmatch_threshold = unmatch_threshold
+        self.match_threshold = match_threshold
+        self.unmatch_threshold = unmatch_threshold
         self._custom_values = custom_values
 
     @property
     def class_name(self):
         return self._class_name
-
-    @property
-    def match_threshold(self):
-        return self._match_threshold
-
-    @property
-    def unmatch_threshold(self):
-        return self._unmatch_threshold
 
     @property
     def num_anchors_per_localization(self):

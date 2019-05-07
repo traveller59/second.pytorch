@@ -38,6 +38,7 @@ def create_target_np(all_anchors,
                      positive_fraction=None,
                      rpn_batch_size=300,
                      norm_by_num_examples=False,
+                     gt_importance=None,
                      box_code_size=7):
     """Modified from FAIR detectron.
     Args:
@@ -62,6 +63,7 @@ def create_target_np(all_anchors,
         rpn_batch_size: int. sample size
         norm_by_num_examples: bool. norm box_weight by number of examples, but
             I recommend to do this outside.
+        gt_importance: 1d array. loss weight per gt.
     Returns:
         labels, bbox_targets, bbox_outside_weights
     """
@@ -83,12 +85,17 @@ def create_target_np(all_anchors,
     logger.debug('anchors.shape: {}'.format(anchors.shape))
     if gt_classes is None:
         gt_classes = np.ones([gt_boxes.shape[0]], dtype=np.int32)
+    if gt_importance is None:
+        gt_importance = np.ones([gt_boxes.shape[0]], dtype=np.float32)
+
     # Compute anchor labels:
     # label=1 is positive, 0 is negative, -1 is don't care (ignore)
     labels = np.empty((num_inside, ), dtype=np.int32)
     gt_ids = np.empty((num_inside, ), dtype=np.int32)
     labels.fill(-1)
     gt_ids.fill(-1)
+    importance = np.empty((num_inside, ), dtype=np.float32)
+    importance.fill(1)
     if len(gt_boxes) > 0:
         # Compute overlaps between the anchors and the gt boxes overlaps
         anchor_by_gt_overlap = similarity_fn(anchors, gt_boxes)
@@ -128,6 +135,7 @@ def create_target_np(all_anchors,
         labels[pos_inds] = gt_classes[gt_inds]
         gt_ids[pos_inds] = gt_inds
         bg_inds = np.where(anchor_to_gt_max < unmatched_threshold)[0]
+        importance[pos_inds] = gt_importance[gt_inds]
     else:
         # labels[:] = 0
         bg_inds = np.arange(num_inside)
@@ -204,6 +212,7 @@ def create_target_np(all_anchors,
         #     bbox_inside_weights, total_anchors, inds_inside, fill=0)
         bbox_outside_weights = unmap(
             bbox_outside_weights, total_anchors, inds_inside, fill=0)
+        importance = unmap(importance, total_anchors, inds_inside, fill=0)
     # return labels, bbox_targets, bbox_outside_weights
     ret = {
         "labels": labels,
@@ -211,6 +220,7 @@ def create_target_np(all_anchors,
         "bbox_outside_weights": bbox_outside_weights,
         "assigned_anchors_overlap": fg_max_overlap,
         "positive_gt_id": gt_pos_ids,
+        "importance": importance,
     }
     if inds_inside is not None:
         ret["assigned_anchors_inds"] = inds_inside[fg_inds]

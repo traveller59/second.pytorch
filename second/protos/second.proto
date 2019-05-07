@@ -7,14 +7,15 @@ import "second/protos/target.proto";
 import "second/protos/voxel_generator.proto";
 
 message VoxelNet {
-  VoxelGenerator voxel_generator = 1;
+  string network_class_name = 1;
+  VoxelGenerator voxel_generator = 2;
   message VoxelFeatureExtractor {
     string module_class_name = 1;
     repeated int32 num_filters = 2;
     bool with_distance = 3;
     int32 num_input_features = 4;
   }
-  VoxelFeatureExtractor voxel_feature_extractor = 2;
+  VoxelFeatureExtractor voxel_feature_extractor = 3;
   message MiddleFeatureExtractor {
     string module_class_name = 1;
     repeated int32 num_filters_down1 = 2;
@@ -22,7 +23,7 @@ message VoxelNet {
     int32 num_input_features = 4;
     int32 downsample_factor = 5;
   }
-  MiddleFeatureExtractor middle_feature_extractor = 3;
+  MiddleFeatureExtractor middle_feature_extractor = 4;
   message RPN {
     string module_class_name = 1;
     repeated int32 layer_nums = 2;
@@ -34,40 +35,33 @@ message VoxelNet {
     int32 num_groups = 8;
     int32 num_input_features = 9;
   }
-  RPN rpn = 4;
-  uint32 num_point_features = 5;
-  bool use_sigmoid_score = 6;
-  Loss loss = 7;
-  bool encode_rad_error_by_sin = 8;
-  bool encode_background_as_zeros = 9;
-  bool use_rotate_nms = 10;
-  bool use_multi_class_nms = 11;
-  int32 nms_pre_max_size = 12;
-  int32 nms_post_max_size = 13;
-  float nms_score_threshold = 14;
-  float nms_iou_threshold = 15;
-  bool use_direction_classifier = 16;
-  float direction_loss_weight = 17;
-  float pos_class_weight = 18;
-  float neg_class_weight = 19;
+  RPN rpn = 5;
+  uint32 num_point_features = 6;
+  bool use_sigmoid_score = 7;
+  Loss loss = 8;
+  bool encode_rad_error_by_sin = 9;
+  bool encode_background_as_zeros = 10;
+  bool use_direction_classifier = 11;
+  float direction_loss_weight = 12;
+  float pos_class_weight = 13;
+  float neg_class_weight = 14;
   enum LossNormType {
     NormByNumExamples = 0;
     NormByNumPositives = 1;
     NormByNumPosNeg = 2;
     DontNorm = 3;
   }
-  LossNormType loss_norm_type = 20;
-  BoxCoder box_coder = 21;
-  TargetAssigner target_assigner = 22;
+  LossNormType loss_norm_type = 15;
+  BoxCoder box_coder = 16;
+  TargetAssigner target_assigner = 17;
+  repeated float post_center_limit_range = 18;
+  float direction_offset = 19;
+  float sin_error_factor = 20;
+  bool nms_class_agnostic = 21;
+  int64 num_direction_bins = 22;
+  float direction_limit_offset = 23;
 
   // deprecated in future
-
-  bool lidar_input = 23;
-  
-  bool use_aux_classifier = 24;
-  bool encode_angle_to_vector = 25;
-  bool without_reflectivity = 26;
-  bool use_bev = 27;
-  repeated float post_center_limit_range = 28;
+  bool lidar_input = 24;
   
 }

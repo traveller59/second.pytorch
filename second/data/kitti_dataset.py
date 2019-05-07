@@ -9,9 +9,10 @@ from second.core import box_np_ops
 from second.core import preprocess as prep
 from second.data import kitti_common as kitti
 from second.utils.eval import get_coco_eval_result, get_official_eval_result
-from second.data.dataset import Dataset
+from second.data.dataset import Dataset, register_dataset
 from second.utils.progress_bar import progress_bar_iter as prog_bar
 
+@register_dataset
 class KittiDataset(Dataset):
     NumPointFeatures = 4
 
@@ -26,6 +27,7 @@ class KittiDataset(Dataset):
             infos = pickle.load(f)
         self._root_path = Path(root_path)
         self._kitti_infos = infos
+
         print("remain number of infos:", len(self._kitti_infos))
         self._class_names = class_names
         self._prep_func = prep_func

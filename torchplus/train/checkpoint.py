@@ -111,10 +111,13 @@ def save(model_dir,
             f.write(json.dumps(ckpt_info_dict, indent=2))
 
 
-def restore(ckpt_path, model):
+def restore(ckpt_path, model, map_func=None):
     if not Path(ckpt_path).is_file():
         raise ValueError("checkpoint {} not exist.".format(ckpt_path))
-    model.load_state_dict(torch.load(ckpt_path))
+    state_dict = torch.load(ckpt_path)
+    if map_func is not None:
+        map_func(state_dict)
+    model.load_state_dict(state_dict)
     print("Restoring parameters from {}".format(ckpt_path))
 
 
@@ -138,28 +141,28 @@ def _get_name_to_model_map(models):
     return name_to_model
 
 
-def try_restore_latest_checkpoints(model_dir, models):
+def try_restore_latest_checkpoints(model_dir, models, map_func=None):
     name_to_model = _get_name_to_model_map(models)
     for name, model in name_to_model.items():
         latest_ckpt = latest_checkpoint(model_dir, name)
         if latest_ckpt is not None:
-            restore(latest_ckpt, model)
+            restore(latest_ckpt, model, map_func)
 
-def restore_latest_checkpoints(model_dir, models):
+def restore_latest_checkpoints(model_dir, models, map_func=None):
     name_to_model = _get_name_to_model_map(models)
     for name, model in name_to_model.items():
         latest_ckpt = latest_checkpoint(model_dir, name)
         if latest_ckpt is not None:
-            restore(latest_ckpt, model)
+            restore(latest_ckpt, model, map_func)
         else:
             raise ValueError("model {}\'s ckpt isn't exist".format(name))
 
-def restore_models(model_dir, models, global_step):
+def restore_models(model_dir, models, global_step, map_func=None):
     name_to_model = _get_name_to_model_map(models)
     for name, model in name_to_model.items():
         ckpt_filename = "{}-{}.tckpt".format(name, global_step)
         ckpt_path = model_dir + "/" + ckpt_filename
-        restore(ckpt_path, model)
+        restore(ckpt_path, model, map_func)
 
 
 def save_models(model_dir,

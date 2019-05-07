@@ -46,8 +46,8 @@ class MixedPrecisionWrapper(object):
                  inc_factor=2.0,
                  dec_factor=0.5,
                  num_iters_be_stable=500):
-        if not isinstance(optimizer, torch.optim.Optimizer):
-            raise ValueError("must provide a torch.optim.Optimizer")
+        # if not isinstance(optimizer, torch.optim.Optimizer):
+        #     raise ValueError("must provide a torch.optim.Optimizer")
         self.optimizer = optimizer
         if hasattr(self.optimizer, 'name'):
             self.name = self.optimizer.name  # for ckpt system
@@ -108,4 +108,3 @@ class MixedPrecisionWrapper(object):
         for g, g_copy in zip(self.param_groups, self.optimizer.param_groups):
             for p_copy, p in zip(g_copy['params'], g['params']):
                 p.data.copy_(p_copy.data)
-

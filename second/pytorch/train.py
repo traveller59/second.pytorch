@@ -29,7 +29,7 @@ def example_convert_to_torch(example, dtype=torch.float32,
     device = device or torch.device("cuda:0")
     example_torch = {}
     float_names = [
-        "voxels", "anchors", "reg_targets", "reg_weights", "bev_map"
+        "voxels", "anchors", "reg_targets", "reg_weights", "bev_map", "importance"
     ]
     for k, v in example.items():
         if k in float_names:
@@ -66,7 +66,6 @@ def build_network(model_cfg, measure_time=False):
     net = second_builder.build(
         model_cfg, voxel_generator, target_assigner, measure_time=measure_time)
     return net
-
 
 def _worker_init_fn(worker_id):
     time_seed = np.array(time.time(), dtype=np.int32)
@@ -140,6 +139,7 @@ def train(config_path,
           freeze_include=None,
           freeze_exclude=None,
           multi_gpu=False,
+          measure_time=False,
           resume=False):
     """train a VoxelNet model specified by a config file.
     """
@@ -175,7 +175,7 @@ def train(config_path,
     model_cfg = config.model.second
     train_cfg = config.train_config
 
-    net = build_network(model_cfg).to(device)
+    net = build_network(model_cfg, measure_time).to(device)
     # if train_cfg.enable_mixed_precision:
     #     net.half()
     #     net.metrics_to_float()
@@ -339,7 +339,12 @@ def train(config_path,
                 else:
                     num_anchors = int(example_torch['anchors_mask'][0].sum())
                 global_step = net.get_global_step()
+
                 if global_step % display_step == 0:
+                    if measure_time:
+                        for name, val in net.get_avg_time_dict().items():
+                            print(f"avg {name} time = {val * 1000:.3f} ms")
+
                     loc_loss_elem = [
                         float(loc_loss[:, :, i].sum().detach().cpu().numpy() /
                               batch_size) for i in range(loc_loss.shape[-1])
@@ -408,14 +413,16 @@ def train(config_path,
                         pickle.dump(detections, f)
                     net.train()
                 step += 1
-                if step > total_step:
+                if step >= total_step:
                     break
-            if step > total_step:
+            if step >= total_step:
                 break
     except Exception as e:
+        print(json.dumps(example["metadata"], indent=2))
+        model_logging.log_text(str(e), step)
+        model_logging.log_text(json.dumps(example["metadata"], indent=2), step)
         torchplus.train.save_models(model_dir, [net, amp_optimizer],
-                                    net.get_global_step())
-        model_logging.log_text(str(e), net.get_global_step())
+                                    step)
         raise e
     finally:
         model_logging.close()
@@ -537,7 +544,7 @@ def evaluate(config_path,
             print("Evaluation {}".format(k))
             print(v)
 
-def helper_tune_target_assigner(config_path):
+def helper_tune_target_assigner(config_path, target_rate=None, update_freq=200, update_delta=0.01, num_tune_epoch=5):
     """get information of target assign to tune thresholds in anchor generator.
     """    
     if isinstance(config_path, str):
@@ -575,7 +582,7 @@ def helper_tune_target_assigner(config_path):
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=1,
-        shuffle=True,
+        shuffle=False,
         num_workers=0,
         pin_memory=False,
         collate_fn=merge_second_batch,
@@ -584,21 +591,73 @@ def helper_tune_target_assigner(config_path):
     
     class_count = {}
     anchor_count = {}
+    class_count_tune = {}
+    anchor_count_tune = {}
     for c in target_assigner.classes:
         class_count[c] = 0
         anchor_count[c] = 0
+        class_count_tune[c] = 0
+        anchor_count_tune[c] = 0
+
+
+    step = 0
+    classes = target_assigner.classes
+    if target_rate is None:
+        num_tune_epoch = 0
+    for epoch in range(num_tune_epoch):
+        for example in dataloader:
+            gt_names = example["gt_names"]
+            for name in gt_names:
+                class_count_tune[name] += 1
+            
+            labels = example['labels']
+            for i in range(1, len(classes) + 1):
+                anchor_count_tune[classes[i - 1]] += int(np.sum(labels == i))
+            if target_rate is not None:
+                for name, rate in target_rate.items():
+                    if class_count_tune[name] > update_freq:
+                        # calc rate
+                        current_rate = anchor_count_tune[name] / class_count_tune[name]
+                        if current_rate > rate:
+                            target_assigner._anchor_generators[classes.index(name)].match_threshold += update_delta
+                            target_assigner._anchor_generators[classes.index(name)].unmatch_threshold += update_delta
+                        else:
+                            target_assigner._anchor_generators[classes.index(name)].match_threshold -= update_delta
+                            target_assigner._anchor_generators[classes.index(name)].unmatch_threshold -= update_delta
+                        anchor_count_tune[name] = 0
+                        class_count_tune[name] = 0
+            step += 1
+    for c in target_assigner.classes:
+        class_count[c] = 0
+        anchor_count[c] = 0
+    total_voxel_gene_time = 0
+    count = 0
 
     for example in dataloader:
         gt_names = example["gt_names"]
+        total_voxel_gene_time += example["metrics"][0]["voxel_gene_time"]
+        count += 1
+
         for name in gt_names:
             class_count[name] += 1
         
         labels = example['labels']
-        for i in range(1, len(target_assigner.classes) + 1):
-            anchor_count[target_assigner.classes[i - 1]] += int(np.sum(labels == i))
-    
+        for i in range(1, len(classes) + 1):
+            anchor_count[classes[i - 1]] += int(np.sum(labels == i))
+    print("avg voxel gene time", total_voxel_gene_time / count)
+
     print(json.dumps(class_count, indent=2))
     print(json.dumps(anchor_count, indent=2))
+    if target_rate is not None:
+        for ag in target_assigner._anchor_generators:
+            if ag.class_name in target_rate:
+                print(ag.class_name, ag.match_threshold, ag.unmatch_threshold)
+
+def mcnms_parameters_search(config_path,
+          model_dir,
+          preds_path):
+    pass
+
 
 if __name__ == '__main__':
     fire.Fire()

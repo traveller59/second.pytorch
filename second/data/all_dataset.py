@@ -4,22 +4,10 @@ from pathlib import Path
 import numpy as np
 
 from second.core import box_np_ops
-from second.data.dataset import Dataset
+from second.data.dataset import Dataset, get_dataset_class
 from second.data.kitti_dataset import KittiDataset
 import second.data.nuscenes_dataset as nuds
 from second.utils.progress_bar import progress_bar_iter as prog_bar
-
-def get_dataset_class(name) -> Dataset:
-    return {
-        "KittiDataset": KittiDataset,
-        "NuScenesDataset": nuds.NuScenesDataset,
-        "NuScenesDatasetD8": nuds.NuScenesDatasetD8,
-        "NuScenesDatasetD8Velo": nuds.NuScenesDatasetD8Velo,
-        "NuScenesDatasetVelo": nuds.NuScenesDatasetVelo,
-        "NuScenesDatasetD4": nuds.NuScenesDatasetD4,
-        "NuScenesDatasetD2": nuds.NuScenesDatasetD2,
-    }[name]
-
 
 def create_groundtruth_database(dataset_class_name,
                                 data_path,

@@ -8,6 +8,21 @@ from torch.nn import functional as F
 from torchplus.nn import Empty, GroupNorm, Sequential
 from torchplus.tools import change_default_args
 
+REGISTERED_VFE_CLASSES = {}
+
+def register_vfe(cls, name=None):
+    global REGISTERED_VFE_CLASSES
+    if name is None:
+        name = cls.__name__
+    assert name not in REGISTERED_VFE_CLASSES, f"exist class: {REGISTERED_VFE_CLASSES}"
+    REGISTERED_VFE_CLASSES[name] = cls
+    return cls
+
+def get_vfe_class(name):
+    global REGISTERED_VFE_CLASSES
+    assert name in REGISTERED_VFE_CLASSES, f"available class: {REGISTERED_VFE_CLASSES}"
+    return REGISTERED_VFE_CLASSES[name]
+
 
 def get_paddings_indicator(actual_num, max_num, axis=0):
     """Create boolean mask by actually number of a padded tensor.
@@ -31,7 +46,6 @@ def get_paddings_indicator(actual_num, max_num, axis=0):
     paddings_indicator = actual_num.int() > max_num
     # paddings_indicator shape: [batch_size, max_num]
     return paddings_indicator
-
 
 class VFELayer(nn.Module):
     def __init__(self, in_channels, out_channels, use_norm=True, name='vfe'):
@@ -65,7 +79,7 @@ class VFELayer(nn.Module):
         # [K, T, 2 * units]
         return concatenated
 
-
+@register_vfe
 class VoxelFeatureExtractor(nn.Module):
     def __init__(self,
                  num_input_features=4,
@@ -125,7 +139,7 @@ class VoxelFeatureExtractor(nn.Module):
         voxelwise = torch.max(x, dim=1)[0]
         return voxelwise
 
-
+@register_vfe
 class VoxelFeatureExtractorV2(nn.Module):
     """VoxelFeatureExtractor with arbitrary number of VFE. deprecated.
     """
@@ -189,7 +203,7 @@ class VoxelFeatureExtractorV2(nn.Module):
         voxelwise = torch.max(features, dim=1)[0]
         return voxelwise
 
-
+@register_vfe
 class SimpleVoxel(nn.Module):
     def __init__(self,
                  num_input_features=4,
@@ -210,7 +224,7 @@ class SimpleVoxel(nn.Module):
             dim=1, keepdim=False) / num_voxels.type_as(features).view(-1, 1)
         return points_mean.contiguous()
 
-
+@register_vfe
 class SimpleVoxelRadius(nn.Module):
     """Simple voxel encoder. only keep r, z and reflection feature.
     """
