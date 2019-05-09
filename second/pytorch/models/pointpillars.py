@@ -65,7 +65,7 @@ class PFNLayer(nn.Module):
             return x_concatenated
 
 @register_vfe
-class PillarFeatureNet(nn.Module):
+class PillarFeatureNetOld(nn.Module):
     def __init__(self,
                  num_input_features=4,
                  use_norm=True,
@@ -86,14 +86,14 @@ class PillarFeatureNet(nn.Module):
         """
 
         super().__init__()
-        self.name = 'PillarFeatureNet'
+        self.name = 'PillarFeatureNetOld'
         assert len(num_filters) > 0
         num_input_features += 5
         if with_distance:
             num_input_features += 1
         self._with_distance = with_distance
 
-        # Create PillarFeatureNet layers
+        # Create PillarFeatureNetOld layers
         num_filters = [num_input_features] + list(num_filters)
         pfn_layers = []
         for i in range(len(num_filters) - 1):
@@ -151,7 +151,7 @@ class PillarFeatureNet(nn.Module):
         return features.squeeze()
 
 @register_vfe
-class PillarFeatureNetBugFix(nn.Module):
+class PillarFeatureNet(nn.Module):
     def __init__(self,
                  num_input_features=4,
                  use_norm=True,
@@ -172,14 +172,14 @@ class PillarFeatureNetBugFix(nn.Module):
         """
 
         super().__init__()
-        self.name = 'PillarFeatureNet'
+        self.name = 'PillarFeatureNetOld'
         assert len(num_filters) > 0
         num_input_features += 5
         if with_distance:
             num_input_features += 1
         self._with_distance = with_distance
 
-        # Create PillarFeatureNet layers
+        # Create PillarFeatureNetOld layers
         num_filters = [num_input_features] + list(num_filters)
         pfn_layers = []
         for i in range(len(num_filters) - 1):
@@ -266,7 +266,7 @@ class PillarFeatureNetRadius(nn.Module):
             num_input_features += 1
         self._with_distance = with_distance
 
-        # Create PillarFeatureNet layers
+        # Create PillarFeatureNetOld layers
         num_filters = [num_input_features] + list(num_filters)
         pfn_layers = []
         for i in range(len(num_filters) - 1):
@@ -354,7 +354,7 @@ class PillarFeatureNetRadiusHeight(nn.Module):
             num_input_features += 1
         self._with_distance = with_distance
 
-        # Create PillarFeatureNet layers
+        # Create PillarFeatureNetOld layers
         num_filters = [num_input_features] + list(num_filters)
         pfn_layers = []
         for i in range(len(num_filters) - 1):
