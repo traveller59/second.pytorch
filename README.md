@@ -139,7 +139,7 @@ Download KITTI dataset and create some directories first:
 
 Then run
 ```bash
-python create_data.py kitti_data_prep --data_path=KITTI_DATASET_ROOT
+python create_data.py kitti_data_prep --root_path=KITTI_DATASET_ROOT
 ```
 
 * [NuScenes](https://www.nuscenes.org) Dataset preparation
@@ -160,8 +160,8 @@ Download NuScenes dataset:
 
 Then run
 ```bash
-python create_data.py nuscenes_data_prep --data_path=NUSCENES_TRAINVAL_DATASET_ROOT --version="v1.0-trainval" --max_sweeps=10
-python create_data.py nuscenes_data_prep --data_path=NUSCENES_TEST_DATASET_ROOT --version="v1.0-test" --max_sweeps=10
+python create_data.py nuscenes_data_prep --root_path=NUSCENES_TRAINVAL_DATASET_ROOT --version="v1.0-trainval" --max_sweeps=10
+python create_data.py nuscenes_data_prep --root_path=NUSCENES_TEST_DATASET_ROOT --version="v1.0-test" --max_sweeps=10
 --dataset_name="NuscenesDataset"
 ```
 This will create gt database **without velocity**. to add velocity, use dataset name ```NuscenesDatasetVelo```.
