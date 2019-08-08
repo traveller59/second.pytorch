@@ -6,6 +6,7 @@ import numpy as np
 from second.core import box_np_ops
 from second.data.dataset import Dataset, get_dataset_class
 from second.data.kitti_dataset import KittiDataset
+from second.data.edgar_dataset import EdgarDataset
 import second.data.nuscenes_dataset as nuds
 from second.utils.progress_bar import progress_bar_iter as prog_bar
 

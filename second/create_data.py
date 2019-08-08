@@ -5,8 +5,14 @@ import pickle
 import fire
 
 import second.data.kitti_dataset as kitti_ds
+import second.data.edgar_dataset as edgar_ds
 import second.data.nuscenes_dataset as nu_ds
 from second.data.all_dataset import create_groundtruth_database
+
+
+def edgar_data_prep(root_path):
+    edgar_ds.create_edgar_info_file(root_path)
+    create_groundtruth_database("EdgarDataset", root_path, Path(root_path) / "edgar_infos_train.pkl")
 
 def kitti_data_prep(root_path):
     kitti_ds.create_kitti_info_file(root_path)

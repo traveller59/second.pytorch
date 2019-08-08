@@ -36,12 +36,15 @@ class PFNLayer(nn.Module):
         if not self.last_vfe:
             out_channels = out_channels // 2
         self.units = out_channels
+        print('initializing PFNLayer (in_channels, out_channels) = (%s, %s)'%(in_channels, out_channels))
 
         if use_norm:
+            print('initializing PFNLayer: use_norm')
             BatchNorm1d = change_default_args(
                 eps=1e-3, momentum=0.01)(nn.BatchNorm1d)
             Linear = change_default_args(bias=False)(nn.Linear)
         else:
+            print('initializing PFNLayer: do not use_norm')
             BatchNorm1d = Empty
             Linear = change_default_args(bias=True)(nn.Linear)
 
@@ -51,6 +54,15 @@ class PFNLayer(nn.Module):
     def forward(self, inputs):
 
         x = self.linear(inputs)
+        y = x.permute(0, 2, 1).contiguous()
+        y_size = y.size()
+        print('forward() (y) = ', (y))
+        if y_size[0] == 0:
+            print('forward() (x) = ', (x))
+            print ('ERROR: Tensor with dimension 0')
+            return F.relu(x)
+        y = self.norm(y)
+        print('forward().norm() type(y) = ', type(y))
         x = self.norm(x.permute(0, 2, 1).contiguous()).permute(0, 2,
                                                                1).contiguous()
         x = F.relu(x)
@@ -231,8 +243,12 @@ class PillarFeatureNet(nn.Module):
         features *= mask
 
         # Forward pass through PFNLayers
+        print('Forward pass through PFNLayers: ', len(self.pfn_layers))
+        pfn_counter = 1
         for pfn in self.pfn_layers:
+            print('Forward pass #', pfn_counter)
             features = pfn(features)
+            pfn_counter = pfn_counter + 1 
 
         return features.squeeze()
 

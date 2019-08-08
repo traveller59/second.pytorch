@@ -12,6 +12,9 @@ from second.utils.eval import get_coco_eval_result, get_official_eval_result
 from second.data.dataset import Dataset, register_dataset
 from second.utils.progress_bar import progress_bar_iter as prog_bar
 
+# Force keeping all points in pointcloud by setting constant to False - By Jim
+REDUCE_POINTCLOUD = True
+
 @register_dataset
 class KittiDataset(Dataset):
     NumPointFeatures = 4
@@ -28,7 +31,8 @@ class KittiDataset(Dataset):
         self._root_path = Path(root_path)
         self._kitti_infos = infos
 
-        print("remain number of infos:", len(self._kitti_infos))
+        print("File: ", info_path, "\nremain number of infos:",
+                len(self._kitti_infos), "\n")
         self._class_names = class_names
         self._prep_func = prep_func
 
@@ -178,6 +182,8 @@ class KittiDataset(Dataset):
             assert "lidar" in query
             idx = query["lidar"]["idx"]
         info = self._kitti_infos[idx]
+        # Added printing step info by Jim
+        print('KITTI data keys info for index (#', idx,') : ', info.keys())
         res = {
             "lidar": {
                 "type": "lidar",
@@ -192,6 +198,8 @@ class KittiDataset(Dataset):
         }
 
         pc_info = info["point_cloud"]
+        # Added printing step info by Jim
+        # print('Point Cloud Info: ', pc_info)
         velo_path = Path(pc_info['velodyne_path'])
         if not velo_path.is_absolute():
             velo_path = Path(self._root_path) / pc_info['velodyne_path']
@@ -202,6 +210,8 @@ class KittiDataset(Dataset):
         points = np.fromfile(
             str(velo_path), dtype=np.float32,
             count=-1).reshape([-1, self.NumPointFeatures])
+        # Added printing step info by Jim
+        print('Points shape:', points.shape)
         res["lidar"]["points"] = points
         image_info = info["image"]
         image_path = image_info['image_path']
@@ -249,6 +259,8 @@ class KittiDataset(Dataset):
                 'names': gt_names,
             }
 
+        # Added printing step info by Jim
+        # print('Output: ', res)
         return res
 
 
@@ -318,10 +330,11 @@ def _calculate_num_points_in_gt(data_path,
         rect = calib['R0_rect']
         Trv2c = calib['Tr_velo_to_cam']
         P2 = calib['P2']
-        if remove_outside:
-            points_v = box_np_ops.remove_outside_points(
-                points_v, rect, Trv2c, P2, image_info["image_shape"])
-
+        # Force keeping all points in pointcloud - By Jim
+        if REDUCE_POINTCLOUD:
+            if remove_outside:
+                points_v = box_np_ops.remove_outside_points(
+                    points_v, rect, Trv2c, P2, image_info["image_shape"])
         # points_v = points_v[points_v[:, 0] > 0]
         annos = info['annos']
         num_obj = len([n for n in annos['name'] if n != 'DontCare'])
@@ -391,6 +404,7 @@ def create_kitti_info_file(data_path, save_path=None, relative_path=True):
         relative_path=relative_path)
     filename = save_path / 'kitti_infos_test.pkl'
     print(f"Kitti info test file is saved to {filename}")
+    print(f"Kitti info test file info count {len(kitti_infos_test)}")
     with open(filename, 'wb') as f:
         pickle.dump(kitti_infos_test, f)
 
@@ -419,7 +433,9 @@ def _create_reduced_point_cloud(data_path,
         # then remove outside.
         if back:
             points_v[:, 0] = -points_v[:, 0]
-        points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
+        # Force keeping all points in pointcloud by setting constant to False - By Jim
+        if REDUCE_POINTCLOUD:
+            points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
                                                     image_info["image_shape"])
         if save_path is None:
             save_filename = v_path.parent.parent / (

@@ -250,7 +250,6 @@ def get_kitti_image_info(path,
                 rect_4x4[:3, :3] = R0_rect
             else:
                 rect_4x4 = R0_rect
-            
             Tr_velo_to_cam = np.array([
                 float(info) for info in lines[5].split(' ')[1:13]
             ]).reshape([3, 4])
@@ -268,7 +267,6 @@ def get_kitti_image_info(path,
             calib_info['Tr_velo_to_cam'] = Tr_velo_to_cam
             calib_info['Tr_imu_to_velo'] = Tr_imu_to_velo
             info["calib"] = calib_info
-        
         if annotations is not None:
             info['annos'] = annotations
             add_difficulty_to_annos(info)

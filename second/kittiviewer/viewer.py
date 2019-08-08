@@ -54,6 +54,9 @@ from wavedata.tools.obj_detection import obj_utils
 from avod.core.anchor_generators import grid_anchor_3d_generator
 """
 
+# Force keeping all points in pointcloud (use False) - By Jim
+REDUCE_POINTCLOUD = False
+
 
 class KittiDrawControl(panel.ControlPanel):
     def __init__(self, title, parent=None):
@@ -1146,9 +1149,7 @@ class KittiViewer(QMainWindow):
         Trv2c = calib['Tr_velo_to_cam']
         # detection_anno = kitti.remove_low_height(detection_anno, 25)
         detection_anno = kitti.remove_low_score(detection_anno, self.w_config.get("DTScoreThreshold"))
-        
         dt_bboxes = detection_anno["bbox"]
-        
         dt_boxes_corners, scores, dt_box_lidar = kitti_anno_to_corners(
             self.kitti_info, detection_anno)
         print("DEBUG", dt_box_lidar)
@@ -1325,8 +1326,13 @@ class KittiViewer(QMainWindow):
         if 'num_features' in pc_info:
             num_features = pc_info['num_features']
 
-        points = np.fromfile(
-            v_path, dtype=np.float32, count=-1).reshape([-1, num_features])
+        #
+        # Added numpy file reading step by Jim
+        try:
+            points = np.load(str(v_path))
+        except:
+            points = np.fromfile(
+                v_path, dtype=np.float32, count=-1).reshape([-1, num_features])
         self.points = points
         rect = calib['R0_rect'].astype(np.float32)
         Trv2c = calib['Tr_velo_to_cam'].astype(np.float32)
@@ -1335,9 +1341,11 @@ class KittiViewer(QMainWindow):
         if 'image_shape' in image_info:
             image_shape = image_info['image_shape']
             # self.info("num_points before remove:", self.points.shape[0])
-            if self.w_config.get("RemoveOutsidePoint"):
-                self.points = box_np_ops.remove_outside_points(
-                    self.points, rect, Trv2c, P2, image_shape)
+            # Force keeping all points in pointcloud (use False) - By Jim
+            if REDUCE_POINTCLOUD:
+                if self.w_config.get("RemoveOutsidePoint"):
+                    self.points = box_np_ops.remove_outside_points(
+                        self.points, rect, Trv2c, P2, image_shape)
             # self.info("num_points after remove:", self.points.shape[0])
         img_path = self.w_image_save_path.text()
         img_path = str(Path(img_path).parent / f"{image_idx}.jpg")
@@ -1509,16 +1517,24 @@ class KittiViewer(QMainWindow):
                 v_path = self.root_path / info['velodyne_path']
                 # v_path = v_path.parent.parent / (
                 #     v_path.parent.stem + "_reduced") / v_path.name
-                points = np.fromfile(
-                    str(v_path), dtype=np.float32,
-                    count=-1).reshape([-1, num_features])
+                #
+                #
+                # Added numpy file reading step by Jim
+                try:
+                    points = np.load(str(velo_path))
+                except:
+                    points = np.fromfile(
+                        str(v_path), dtype=np.float32,
+                        count=-1).reshape([-1, num_features])
                 rect = info['calib/R0_rect']
                 P2 = info['calib/P2']
                 Trv2c = info['calib/Tr_velo_to_cam']
                 image_shape = info['img_shape']
-                if self.w_config.get("RemoveOutsidePoint"):
-                    points = box_np_ops.remove_outside_points(
-                        points, rect, Trv2c, P2, image_shape)
+                # Force keeping all points in pointcloud (use False) - By Jim
+                if REDUCE_POINTCLOUD:
+                    if self.w_config.get("RemoveOutsidePoint"):
+                        points = box_np_ops.remove_outside_points(
+                            points, rect, Trv2c, P2, image_shape)
                 inputs = self.inference_ctx.get_inference_input_dict(
                     info, points)
                 det_annos += self.inference_ctx.inference(inputs)

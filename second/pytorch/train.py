@@ -12,6 +12,7 @@ import torch
 from google.protobuf import text_format
 
 import second.data.kitti_common as kitti
+import second.data.edgar_common as edgar
 import torchplus
 from second.builder import target_assigner_builder, voxel_builder
 from second.core import box_np_ops
@@ -144,7 +145,6 @@ def train(config_path,
     """train a VoxelNet model specified by a config file.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
     model_dir = str(Path(model_dir).resolve())
     if create_folder:
         if Path(model_dir).exists():
@@ -486,6 +486,7 @@ def evaluate(config_path,
         training=False,
         voxel_generator=voxel_generator,
         target_assigner=target_assigner)
+    print("Dataset size:", len(eval_dataset))
     eval_dataloader = torch.utils.data.DataLoader(
         eval_dataset,
         batch_size=batch_size,
@@ -512,6 +513,7 @@ def evaluate(config_path,
     t2 = time.time()
 
     for example in iter(eval_dataloader):
+        print('Example to test: ', example)
         if measure_time:
             prep_times.append(time.time() - t2)
             torch.cuda.synchronize()

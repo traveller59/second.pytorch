@@ -11,6 +11,7 @@ from pathlib import Path
 
 import fire
 import torch
+import torchplus
 import numpy as np
 import skimage
 from flask import Flask, jsonify, request
@@ -170,7 +171,12 @@ def build_network_():
         text_format.Merge(proto_str, config)
     device = device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net = build_network(config.model.second).to(device).float().eval()
-    net.load_state_dict(torch.load(ckpt_path))
+
+    # changing restore mode [Start] - By Jim
+    torchplus.train.try_restore_latest_checkpoints(ckpt_path, [net])
+    # torchplus.train.restore(ckpt_path, net)
+    # net.load_state_dict(torch.load(ckpt_path))
+    # changing restore mode [End] - By Jim
     eval_input_cfg = config.eval_input_reader
     BACKEND.dataset = input_reader_builder.build(
         eval_input_cfg,

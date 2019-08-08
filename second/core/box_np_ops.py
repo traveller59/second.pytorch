@@ -7,6 +7,9 @@ from spconv.utils import rbbox_iou, rbbox_intersection
 from second.core.geometry import points_in_convex_polygon_3d_jit, points_count_convex_polygon_3d_jit
 
 
+# Force keeping all points in pointcloud by using False - By Jim
+REDUCE_POINTCLOUD = True
+
 def riou_cc(rbboxes, qrbboxes, standup_thresh=0.0):
     # less than 50ms when used in second one thread. 10x slower than gpu
     boxes_corners = center_to_corner_box2d(rbboxes[:, :2], rbboxes[:, 2:4],
@@ -681,15 +684,18 @@ def box_lidar_to_camera(data, r_rect, velo2cam):
 
 def remove_outside_points(points, rect, Trv2c, P2, image_shape):
     # 5x faster than remove_outside_points_v1(2ms vs 10ms)
-    C, R, T = projection_matrix_to_CRT_kitti(P2)
-    image_bbox = [0, 0, image_shape[1], image_shape[0]]
-    frustum = get_frustum(image_bbox, C)
-    frustum -= T
-    frustum = np.linalg.inv(R) @ frustum.T
-    frustum = camera_to_lidar(frustum.T, rect, Trv2c)
-    frustum_surfaces = corner_to_surfaces_3d_jit(frustum[np.newaxis, ...])
-    indices = points_in_convex_polygon_3d_jit(points[:, :3], frustum_surfaces)
-    points = points[indices.reshape([-1])]
+    # Force keeping all points in pointcloud - By Jim
+    print('Called remove_outside_points')
+    if REDUCE_POINTCLOUD:
+        C, R, T = projection_matrix_to_CRT_kitti(P2)
+        image_bbox = [0, 0, image_shape[1], image_shape[0]]
+        frustum = get_frustum(image_bbox, C)
+        frustum -= T
+        frustum = np.linalg.inv(R) @ frustum.T
+        frustum = camera_to_lidar(frustum.T, rect, Trv2c)
+        frustum_surfaces = corner_to_surfaces_3d_jit(frustum[np.newaxis, ...])
+        indices = points_in_convex_polygon_3d_jit(points[:, :3], frustum_surfaces)
+        points = points[indices.reshape([-1])]
     return points
 
 

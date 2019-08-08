@@ -8,6 +8,7 @@ import numpy as np
 from second.core import box_np_ops
 from second.core import preprocess as prep
 from second.data import kitti_common as kitti
+from second.data import edgar_common as edgar
 
 REGISTERED_DATASET_CLASSES = {}
 
@@ -15,13 +16,17 @@ def register_dataset(cls, name=None):
     global REGISTERED_DATASET_CLASSES
     if name is None:
         name = cls.__name__
-    assert name not in REGISTERED_DATASET_CLASSES, f"exist class: {REGISTERED_DATASET_CLASSES}"
+    assert_str = "class: {}, already exists in {}".format( name, REGISTERED_DATASET_CLASSES )
+    #assert (name not in REGISTERED_DATASET_CLASSES), "exist class: %s"%(name)
+    assert (name not in REGISTERED_DATASET_CLASSES), assert_str
     REGISTERED_DATASET_CLASSES[name] = cls
     return cls
 
 def get_dataset_class(name):
     global REGISTERED_DATASET_CLASSES
-    assert name in REGISTERED_DATASET_CLASSES, f"available class: {REGISTERED_DATASET_CLASSES}"
+    assert_str = "class {} is not available in {}".format( name, REGISTERED_DATASET_CLASSES )
+    # assert (name in REGISTERED_DATASET_CLASSES), "%s not available class in: %s"%(name, REGISTERED_DATASET_CLASSES)
+    assert (name in REGISTERED_DATASET_CLASSES), assert_str
     return REGISTERED_DATASET_CLASSES[name]
 
 
