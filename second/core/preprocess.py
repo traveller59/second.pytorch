@@ -13,6 +13,21 @@ from second.core.geometry import (is_line_segment_intersection_jit,
                                   points_in_convex_polygon_jit)
 import copy
 
+def read_velodyne_file( file_name, num_features = 4, wipe_intensity = True ):
+    # Added numpy file reading step by Jim
+    try:
+        points = np.load(str(file_name))
+        # print("Read Numpy file: ", str(file_name))
+    except ValueError:
+        # print("Read Binary file: ", str(file_name))
+        points = np.fromfile( file_name, dtype=np.float32,
+                count=-1).reshape([-1, num_features])
+    except:
+        print("Unexpected error:", sys.exc_info()[0])
+        raise
+    if wipe_intensity:
+        points[:,3] = 0
+    return points
 
 class BatchSampler:
     def __init__(self,

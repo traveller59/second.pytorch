@@ -56,13 +56,14 @@ class PFNLayer(nn.Module):
         x = self.linear(inputs)
         y = x.permute(0, 2, 1).contiguous()
         y_size = y.size()
-        print('forward() (y) = ', (y))
+        # print('forward() (y) = ', (y))
         if y_size[0] == 0:
             print('forward() (x) = ', (x))
             print ('ERROR: Tensor with dimension 0')
             return F.relu(x)
         y = self.norm(y)
-        print('forward().norm() type(y) = ', type(y))
+        # Added printing step by Jim
+        # print('forward().norm() type(y) = ', type(y))
         x = self.norm(x.permute(0, 2, 1).contiguous()).permute(0, 2,
                                                                1).contiguous()
         x = F.relu(x)
@@ -84,7 +85,9 @@ class PillarFeatureNetOld(nn.Module):
                  num_filters=(64, ),
                  with_distance=False,
                  voxel_size=(0.2, 0.2, 4),
-                 pc_range=(0, -40, -3, 70.4, 40, 1)):
+                 # By Jim: extend voxelization in 3D
+                 pc_range=(-100, -100, -100, 100, 100, 100)):
+                 # pc_range=(0, -40, -3, 70.4, 40, 1)):
         """
         Pillar Feature Net.
         The network prepares the pillar features and performs forward pass through PFNLayers. This net performs a
@@ -170,7 +173,9 @@ class PillarFeatureNet(nn.Module):
                  num_filters=(64, ),
                  with_distance=False,
                  voxel_size=(0.2, 0.2, 4),
-                 pc_range=(0, -40, -3, 70.4, 40, 1)):
+                 # By Jim: extend voxelization in 3D
+                 pc_range=(-100, -100, -100, 100, 100, 100)):
+                 # pc_range=(0, -40, -3, 70.4, 40, 1)):
         """
         Pillar Feature Net.
         The network prepares the pillar features and performs forward pass through PFNLayers. This net performs a
@@ -243,10 +248,11 @@ class PillarFeatureNet(nn.Module):
         features *= mask
 
         # Forward pass through PFNLayers
-        print('Forward pass through PFNLayers: ', len(self.pfn_layers))
+        # Added printing step by Jim
+        # print('Forward pass through PFNLayers: ', len(self.pfn_layers))
         pfn_counter = 1
         for pfn in self.pfn_layers:
-            print('Forward pass #', pfn_counter)
+            # print('Forward pass #', pfn_counter)
             features = pfn(features)
             pfn_counter = pfn_counter + 1 
 
@@ -260,7 +266,9 @@ class PillarFeatureNetRadius(nn.Module):
                  num_filters=(64, ),
                  with_distance=False,
                  voxel_size=(0.2, 0.2, 4),
-                 pc_range=(0, -40, -3, 70.4, 40, 1)):
+                 # By Jim: extend voxelization in 3D
+                 pc_range=(-100, -100, -100, 100, 100, 100)):
+                 # pc_range=(0, -40, -3, 70.4, 40, 1)):
         """
         Pillar Feature Net.
         The network prepares the pillar features and performs forward pass through PFNLayers. This net performs a
@@ -348,7 +356,9 @@ class PillarFeatureNetRadiusHeight(nn.Module):
                  num_filters=(64, ),
                  with_distance=False,
                  voxel_size=(0.2, 0.2, 4),
-                 pc_range=(0, -40, -3, 70.4, 40, 1)):
+                 # By Jim: extend voxelization in 3D
+                 pc_range=(-100, -100, -100, 100, 100, 100)):
+                 # pc_range=(0, -40, -3, 70.4, 40, 1)):
         """
         Pillar Feature Net.
         The network prepares the pillar features and performs forward pass through PFNLayers. This net performs a

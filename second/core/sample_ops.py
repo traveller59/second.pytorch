@@ -8,6 +8,7 @@ import numpy as np
 
 from second.core import box_np_ops
 from second.core import preprocess as prep
+from second.core.preprocess import read_velodyne_file
 from second.utils.check import shape_mergeable
 
 
@@ -163,9 +164,9 @@ class DataBaseSamplerV2:
             num_sampled = len(sampled)
             s_points_list = []
             for info in sampled:
-                s_points = np.fromfile(
-                    str(pathlib.Path(root_path) / info["path"]),
-                    dtype=np.float32)
+                # Added numpy file reading step by Jim
+                s_points_filename = str(pathlib.Path(root_path) / info["path"])
+                s_points = read_velodyne_file( s_points_filename )
                 s_points = s_points.reshape([-1, num_point_features])
                 # if not add_rgb_to_points:
                 #     s_points = s_points[:, :4]

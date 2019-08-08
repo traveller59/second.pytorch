@@ -30,7 +30,7 @@ from shapely.geometry import Polygon
 from skimage import io
 
 import second.core.box_np_ops as box_np_ops
-import second.core.preprocess as prep
+import second.core.preprocess as prep, read_velodyne_file
 import second.kittiviewer.control_panel as panel
 from second.core.anchor_generator import AnchorGeneratorStride
 from second.core.box_coders import GroundBox3dCoder
@@ -83,7 +83,9 @@ class KittiDrawControl(panel.ControlPanel):
                 
                 self.add_checkbox("DrawDTLabels")
                 self.add_checkbox("DTScoreAsAlpha")
-                self.add_fspinbox("DTScoreThreshold", 0.0, 1.0, 0.01, 0.3)
+                # By Jim: increment minimum score for box display
+                # self.add_fspinbox("DTScoreThreshold", 0.0, 1.0, 0.01, 0.3)
+                self.add_fspinbox("DTScoreThreshold", 0.3, 1.0, 0.30, 0.3)
                 self.add_colorbutton("DTBoxColor",
                                      bbox_plot.gl_color(GLColor.Blue))
                 self.add_fspinbox("DTBoxAlpha", 0.0, 1.0, 0.05, 0.5)
@@ -1148,7 +1150,9 @@ class KittiViewer(QMainWindow):
         P2 = calib['P2']
         Trv2c = calib['Tr_velo_to_cam']
         # detection_anno = kitti.remove_low_height(detection_anno, 25)
-        detection_anno = kitti.remove_low_score(detection_anno, self.w_config.get("DTScoreThreshold"))
+        # By Jim: increment minimum score for box display
+        detection_anno = kitti.remove_low_score(detection_anno, 3.0)
+        # detection_anno = kitti.remove_low_score(detection_anno, self.w_config.get("DTScoreThreshold"))
         dt_bboxes = detection_anno["bbox"]
         dt_boxes_corners, scores, dt_box_lidar = kitti_anno_to_corners(
             self.kitti_info, detection_anno)
@@ -1328,11 +1332,7 @@ class KittiViewer(QMainWindow):
 
         #
         # Added numpy file reading step by Jim
-        try:
-            points = np.load(str(v_path))
-        except:
-            points = np.fromfile(
-                v_path, dtype=np.float32, count=-1).reshape([-1, num_features])
+        points = read_velodyne_file(str(v_path))
         self.points = points
         rect = calib['R0_rect'].astype(np.float32)
         Trv2c = calib['Tr_velo_to_cam'].astype(np.float32)
@@ -1477,8 +1477,10 @@ class KittiViewer(QMainWindow):
 
     def on_BuildVxNetPressed(self):
         if self.w_config.get("TensorflowInference"):
+            print('****** Built - TensorflowInference')
             self.inference_ctx = TFInferenceContext()
         else:
+            print('****** Built - TorchInference')
             self.inference_ctx = TorchInferenceContext()
         vconfig_path = Path(self.w_vconfig_path.text())
         self.inference_ctx.build(vconfig_path)
@@ -1495,6 +1497,7 @@ class KittiViewer(QMainWindow):
         with self.inference_ctx.ctx():
             det_annos = self.inference_ctx.inference(inputs)
         self.info("detection time:", time.time() - t)
+        print("detection time:", time.time() - t)
         self.draw_detection(det_annos[0])
 
     def on_LoadInferenceVxNetPressed(self):
@@ -1520,12 +1523,7 @@ class KittiViewer(QMainWindow):
                 #
                 #
                 # Added numpy file reading step by Jim
-                try:
-                    points = np.load(str(velo_path))
-                except:
-                    points = np.fromfile(
-                        str(v_path), dtype=np.float32,
-                        count=-1).reshape([-1, num_features])
+                points = read_velodyne_file(str(velo_path))
                 rect = info['calib/R0_rect']
                 P2 = info['calib/P2']
                 Trv2c = info['calib/Tr_velo_to_cam']

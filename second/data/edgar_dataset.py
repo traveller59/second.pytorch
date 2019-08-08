@@ -7,6 +7,7 @@ import numpy as np
 
 from second.core import box_np_ops
 from second.core import preprocess as prep
+from second.core.preprocess import read_velodyne_file
 from second.data import edgar_common as edgar
 from second.utils.eval import get_coco_eval_result, get_official_eval_result
 from second.data.dataset import Dataset, register_dataset
@@ -207,12 +208,7 @@ class EdgarDataset(Dataset):
         if velo_reduced_path.exists():
             velo_path = velo_reduced_path
         # Added numpy file reading step by Jim
-        points = np.load(str(velo_path))
-        '''
-        points = np.fromfile(
-            str(velo_path), dtype=np.float32,
-            count=-1).reshape([-1, self.NumPointFeatures])
-        '''
+        points = read_velodyne_file( str(velo_path) )
         # Added printing step info by Jim
         print('Points shape:', points.shape)
         res["lidar"]["points"] = points
@@ -329,11 +325,7 @@ def _calculate_num_points_in_gt(data_path,
         else:
             v_path = pc_info["velodyne_path"]
         # Added numpy file reading step by Jim
-        points_v = np.load(str(v_path))
-        '''
-        points_v = np.fromfile(
-            v_path, dtype=np.float32, count=-1).reshape([-1, num_features])
-        '''
+        points_v = read_velodyne_file( str(v_path) )
         rect = calib['R0_rect']
         Trv2c = calib['Tr_velo_to_cam']
         P2 = calib['P2']
@@ -430,11 +422,7 @@ def _create_reduced_point_cloud(data_path,
         v_path = pc_info['velodyne_path']
         v_path = Path(data_path) / v_path
         # Reads from a Numpy file - By Jim
-        points_v = np.load(str(v_path))
-        '''
-        points_v = np.fromfile(
-            str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
-        '''
+        points_v = read_velodyne_file(str(v_path))
         rect = calib['R0_rect']
         P2 = calib['P2']
         Trv2c = calib['Tr_velo_to_cam']

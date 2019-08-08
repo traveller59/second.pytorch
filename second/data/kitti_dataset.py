@@ -7,13 +7,14 @@ import numpy as np
 
 from second.core import box_np_ops
 from second.core import preprocess as prep
+from second.core.preprocess import read_velodyne_file
 from second.data import kitti_common as kitti
 from second.utils.eval import get_coco_eval_result, get_official_eval_result
 from second.data.dataset import Dataset, register_dataset
 from second.utils.progress_bar import progress_bar_iter as prog_bar
 
 # Force keeping all points in pointcloud by setting constant to False - By Jim
-REDUCE_POINTCLOUD = True
+REDUCE_POINTCLOUD = False
 
 @register_dataset
 class KittiDataset(Dataset):
@@ -183,7 +184,7 @@ class KittiDataset(Dataset):
             idx = query["lidar"]["idx"]
         info = self._kitti_infos[idx]
         # Added printing step info by Jim
-        print('KITTI data keys info for index (#', idx,') : ', info.keys())
+        # print('KITTI data keys info for index (#', idx,') : ', info.keys())
         res = {
             "lidar": {
                 "type": "lidar",
@@ -207,11 +208,10 @@ class KittiDataset(Dataset):
             velo_path.parent.stem + '_reduced') / velo_path.name
         if velo_reduced_path.exists():
             velo_path = velo_reduced_path
-        points = np.fromfile(
-            str(velo_path), dtype=np.float32,
-            count=-1).reshape([-1, self.NumPointFeatures])
+         # Added numpy file reading step by Jim
+        points = read_velodyne_file(str(velo_path))
         # Added printing step info by Jim
-        print('Points shape:', points.shape)
+        # print('Points shape:', points.shape)
         res["lidar"]["points"] = points
         image_info = info["image"]
         image_path = image_info['image_path']
@@ -325,8 +325,8 @@ def _calculate_num_points_in_gt(data_path,
             v_path = str(Path(data_path) / pc_info["velodyne_path"])
         else:
             v_path = pc_info["velodyne_path"]
-        points_v = np.fromfile(
-            v_path, dtype=np.float32, count=-1).reshape([-1, num_features])
+         # Added numpy file reading step by Jim
+        points_v = read_velodyne_file(str(v_path))
         rect = calib['R0_rect']
         Trv2c = calib['Tr_velo_to_cam']
         P2 = calib['P2']
@@ -422,8 +422,8 @@ def _create_reduced_point_cloud(data_path,
 
         v_path = pc_info['velodyne_path']
         v_path = Path(data_path) / v_path
-        points_v = np.fromfile(
-            str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
+         # Added numpy file reading step by Jim
+        points_v = read_velodyne_file(str(v_path))
         rect = calib['R0_rect']
         P2 = calib['P2']
         Trv2c = calib['Tr_velo_to_cam']
