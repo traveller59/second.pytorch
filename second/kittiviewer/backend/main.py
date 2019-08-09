@@ -8,6 +8,7 @@ import json
 import pickle
 import time
 from pathlib import Path
+import pprint
 
 import fire
 import torch
@@ -94,10 +95,9 @@ def get_pointcloud():
         return error_response("root path is not set")
     image_idx = instance["image_idx"]
     enable_int16 = instance["enable_int16"]
-    
+    #
     idx = BACKEND.image_idxes.index(image_idx)
     sensor_data = BACKEND.dataset.get_sensor_data(idx)
-
     # img_shape = image_info["image_shape"] # hw
     if 'annotations' in sensor_data["lidar"]:
         annos = sensor_data["lidar"]['annotations']
@@ -130,7 +130,7 @@ def get_image():
     instance = request.json
     response = {"status": "normal"}
     if BACKEND.root_path is None:
-        return error_response("root path is not set")    
+        return error_response("root path is not set")
     image_idx = instance["image_idx"]
     idx = BACKEND.image_idxes.index(image_idx)
     query = {
@@ -213,15 +213,26 @@ def inference_by_idx():
     example["anchors"] = example["anchors"][np.newaxis, ...]
     example_torch = example_convert_to_torch(example, device=BACKEND.device)
     pred = BACKEND.net(example_torch)[0]
+    #Added printing response by Jim
+    dt_scores = pred["scores"].detach().cpu().numpy()
+    #Added response filtering by threshold by Jim
+    dt_score_filter = np.where(dt_scores>=0.10)
+    print('Response filtered scores:', dt_scores[dt_score_filter])
+    dt_scores = dt_scores[dt_score_filter]
     box3d = pred["box3d_lidar"].detach().cpu().numpy()
+    box3d = box3d[dt_score_filter]
     locs = box3d[:, :3]
     dims = box3d[:, 3:6]
     rots = np.concatenate([np.zeros([locs.shape[0], 2], dtype=np.float32), -box3d[:, 6:7]], axis=1)
+    dt_labels = pred["label_preds"].detach().cpu().numpy()
+    dt_labels = dt_labels[dt_score_filter]
     response["dt_locs"] = locs.tolist()
     response["dt_dims"] = dims.tolist()
     response["dt_rots"] = rots.tolist()
-    response["dt_labels"] = pred["label_preds"].detach().cpu().numpy().tolist()
-    response["dt_scores"] = pred["scores"].detach().cpu().numpy().tolist()
+    response["dt_labels"] = dt_labels.tolist()
+    # response["dt_labels"] = pred["label_preds"].detach().cpu().numpy().tolist()
+    response["dt_scores"] = dt_scores.tolist()
+    # response["dt_scores"] = pred["scores"].detach().cpu().numpy().tolist()
 
     response = jsonify(results=[response])
     response.headers['Access-Control-Allow-Headers'] = '*'

@@ -149,7 +149,12 @@ KittiViewer.prototype = {
                 }
                 let label_with_score = [];
                 for (var i = 0; i < locs.length; ++i) {
-                    label_with_score.push("score=" + scores[i].toFixed(2).toString());
+                    // To reduce clutter, by Jim
+                    if (scores[i].toFixed(2)>=0.07) {
+                        label_with_score.push("xscore=" + scores[i].toFixed(2).toString()):
+		    } else {
+                        label_with_score.push(" "); 
+		    }
                 }
                 
                 self.dtBoxes = boxEdgeWithLabel(dims, locs, rots, 2, self.dtBoxColor,
@@ -263,7 +268,12 @@ KittiViewer.prototype = {
                         console.log("draw det", dims.length);
                         let label_with_score = [];
                         for (var i = 0; i < locs.length; ++i) {
-                            label_with_score.push("score=" + scores[i].toFixed(2).toString());
+                            // To reduce clutter, by Jim
+                            if (scores[i].toFixed(2)>=0.07) {
+                                label_with_score.push("xscore=" + scores[i].toFixed(2).toString()):
+		            } else {
+                                label_with_score.push(" "); 
+		            }
                         }
                         
                         self.dtBoxes = boxEdgeWithLabel(dims, locs, rots, 2, self.dtBoxColor,

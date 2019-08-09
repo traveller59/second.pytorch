@@ -201,6 +201,7 @@ def compute_statistics_jit(overlaps,
 
     assigned_detection = [False] * det_size
     ignored_threshold = [False] * det_size
+    print('Using threshold= ', thresh )
     if compute_fp:
         for i in range(det_size):
             if (dt_scores[i] < thresh):

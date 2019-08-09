@@ -1140,7 +1140,8 @@ class KittiViewer(QMainWindow):
         if self.kitti_info is None:
             self.error("you must load infos and choose a existing image idx first.")
             return
-
+        # Added printing execution of function by Jim
+        print('***** draw_detection ****')
         dt_box_color = self.w_config.get("DTBoxColor")[:3]
         dt_box_color = (*dt_box_color, self.w_config.get("DTBoxAlpha"))
 
