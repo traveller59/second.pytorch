@@ -109,3 +109,6 @@ venv.bak/
 *.swp
 
 .vscode
+
+# Models
+pp_ped_only/
