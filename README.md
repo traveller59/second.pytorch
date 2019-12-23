@@ -160,11 +160,10 @@ Download NuScenes dataset:
 
 Then run
 ```bash
-python create_data.py nuscenes_data_prep --data_path=NUSCENES_TRAINVAL_DATASET_ROOT --version="v1.0-trainval" --max_sweeps=10
-python create_data.py nuscenes_data_prep --data_path=NUSCENES_TEST_DATASET_ROOT --version="v1.0-test" --max_sweeps=10
---dataset_name="NuscenesDataset"
+python create_data.py nuscenes_data_prep --root_path=$NUSCENES_TRAINVAL_DATASET_ROOT --version="v1.0-trainval" --max_sweeps=10 --dataset_name="NuScenesDataset"
+python create_data.py nuscenes_data_prep --root_path=$NUSCENES_TEST_DATASET_ROOT --version="v1.0-test" --max_sweeps=10 --dataset_name="NuScenesDataset"
 ```
-This will create gt database **without velocity**. to add velocity, use dataset name ```NuscenesDatasetVelo```.
+This will create gt database **without velocity**. to add velocity, use dataset name ```NuScenesDatasetVelo```.
 
 * Modify config file
 
