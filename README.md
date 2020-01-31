@@ -139,7 +139,7 @@ Download KITTI dataset and create some directories first:
 
 Then run
 ```bash
-python create_data.py kitti_data_prep --data_path=KITTI_DATASET_ROOT
+python create_data.py kitti_data_prep --root_path=KITTI_DATASET_ROOT
 ```
 
 * [NuScenes](https://www.nuscenes.org) Dataset preparation
