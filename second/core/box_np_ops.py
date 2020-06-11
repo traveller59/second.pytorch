@@ -7,6 +7,8 @@ from spconv.utils import rbbox_iou, rbbox_intersection
 from second.core.geometry import points_in_convex_polygon_3d_jit, points_count_convex_polygon_3d_jit
 
 
+eps = 1e-8
+
 def riou_cc(rbboxes, qrbboxes, standup_thresh=0.0):
     # less than 50ms when used in second one thread. 10x slower than gpu
     boxes_corners = center_to_corner_box2d(rbboxes[:, :2], rbboxes[:, 2:4],
@@ -53,13 +55,13 @@ def second_box_encode(boxes,
         xa, ya, za, wa, la, ha, ra = np.split(anchors, box_ndim, axis=1)
         xg, yg, zg, wg, lg, hg, rg = np.split(boxes, box_ndim, axis=1)
 
-    diagonal = np.sqrt(la**2 + wa**2)  # 4.3
+    diagonal = np.sqrt(la**2 + wa**2 + eps)  # 4.3
     xt = (xg - xa) / diagonal
     yt = (yg - ya) / diagonal
     zt = (zg - za) / ha  # 1.6
-    lt = np.log(lg / la)
-    wt = np.log(wg / wa)
-    ht = np.log(hg / ha)
+    lt = np.log(lg / la + eps)
+    wt = np.log(wg / wa + eps)
+    ht = np.log(hg / ha + eps)
     rt = rg - ra
     cts = [g - a for g, a in zip(cgs, cas)]
     if smooth_dim:
@@ -67,9 +69,9 @@ def second_box_encode(boxes,
         wt = wg / wa - 1
         ht = hg / ha - 1
     else:
-        lt = np.log(lg / la)
-        wt = np.log(wg / wa)
-        ht = np.log(hg / ha)
+        lt = np.log(lg / la + eps)
+        wt = np.log(wg / wa + eps)
+        ht = np.log(hg / ha + eps)
     if encode_angle_to_vector:
         rgx = np.cos(rg)
         rgy = np.sin(rg)
@@ -109,7 +111,7 @@ def second_box_decode(box_encodings,
         else:
             xt, yt, zt, wt, lt, ht, rt = np.split(box_encodings, box_ndim, axis=-1)
 
-    diagonal = np.sqrt(la**2 + wa**2)
+    diagonal = np.sqrt(la**2 + wa**2 + eps)
     xg = xt * diagonal + xa
     yg = yt * diagonal + ya
     zg = zt * ha + za
@@ -147,15 +149,15 @@ def bev_box_encode(boxes,
     # need to convert boxes to z-center format
     xa, ya, wa, la, ra = np.split(anchors, 5, axis=-1)
     xg, yg, wg, lg, rg = np.split(boxes, 5, axis=-1)
-    diagonal = np.sqrt(la**2 + wa**2)  # 4.3
+    diagonal = np.sqrt(la**2 + wa**2 + eps)  # 4.3
     xt = (xg - xa) / diagonal
     yt = (yg - ya) / diagonal
     if smooth_dim:
         lt = lg / la - 1
         wt = wg / wa - 1
     else:
-        lt = np.log(lg / la)
-        wt = np.log(wg / wa)
+        lt = np.log(lg / la + eps)
+        wt = np.log(wg / wa + eps)
     if encode_angle_to_vector:
         rgx = np.cos(rg)
         rgy = np.sin(rg)
@@ -184,7 +186,7 @@ def bev_box_decode(box_encodings,
         xt, yt, wt, lt, rtx, rty = np.split(box_encodings, 6, axis=-1)
     else:
         xt, yt, wt, lt, rt = np.split(box_encodings, 5, axis=-1)
-    diagonal = np.sqrt(la**2 + wa**2)
+    diagonal = np.sqrt(la**2 + wa**2 + eps)
     xg = xt * diagonal + xa
     yg = yt * diagonal + ya
     if smooth_dim:

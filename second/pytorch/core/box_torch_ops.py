@@ -12,6 +12,8 @@ from second.core.non_max_suppression.nms_gpu import (nms_gpu_cc, rotate_iou_gpu,
 from second.core.non_max_suppression.nms_cpu import rotate_nms_cc
 import spconv
 
+eps = 1e-8
+
 def second_box_encode(boxes, anchors, encode_angle_to_vector=False, smooth_dim=False):
     """box encode for VoxelNet
     Args:
@@ -27,7 +29,7 @@ def second_box_encode(boxes, anchors, encode_angle_to_vector=False, smooth_dim=F
         xa, ya, za, wa, la, ha, ra = torch.split(anchors, 1, dim=-1)
         xg, yg, zg, wg, lg, hg, rg = torch.split(boxes, 1, dim=-1)
 
-    diagonal = torch.sqrt(la**2 + wa**2)
+    diagonal = torch.sqrt(la**2 + wa**2 + eps)
     xt = (xg - xa) / diagonal
     yt = (yg - ya) / diagonal
     zt = (zg - za) / ha
@@ -37,9 +39,9 @@ def second_box_encode(boxes, anchors, encode_angle_to_vector=False, smooth_dim=F
         wt = wg / wa - 1
         ht = hg / ha - 1
     else:
-        lt = torch.log(lg / la)
-        wt = torch.log(wg / wa)
-        ht = torch.log(hg / ha)
+        lt = torch.log(lg / la + eps)
+        wt = torch.log(wg / wa + eps)
+        ht = torch.log(hg / ha + eps)
     if encode_angle_to_vector:
         rgx = torch.cos(rg)
         rgy = torch.sin(rg)
@@ -78,7 +80,7 @@ def second_box_decode(box_encodings, anchors, encode_angle_to_vector=False, smoo
 
     # za = za + ha / 2
     # xt, yt, zt, wt, lt, ht, rt = torch.split(box_encodings, 1, dim=-1)
-    diagonal = torch.sqrt(la**2 + wa**2)
+    diagonal = torch.sqrt(la**2 + wa**2 + eps)
     xg = xt * diagonal + xa
     yg = yt * diagonal + ya
     zg = zt * ha + za
@@ -109,15 +111,15 @@ def bev_box_encode(boxes, anchors, encode_angle_to_vector=False, smooth_dim=Fals
     """
     xa, ya, wa, la, ra = torch.split(anchors, 1, dim=-1)
     xg, yg, wg, lg, rg = torch.split(boxes, 1, dim=-1)
-    diagonal = torch.sqrt(la**2 + wa**2)
+    diagonal = torch.sqrt(la**2 + wa**2 + eps)
     xt = (xg - xa) / diagonal
     yt = (yg - ya) / diagonal
     if smooth_dim:
         lt = lg / la - 1
         wt = wg / wa - 1
     else:
-        lt = torch.log(lg / la)
-        wt = torch.log(wg / wa)
+        lt = torch.log(lg / la + eps)
+        wt = torch.log(wg / wa + eps)
     if encode_angle_to_vector:
         rgx = torch.cos(rg)
         rgy = torch.sin(rg)
@@ -149,7 +151,7 @@ def bev_box_decode(box_encodings, anchors, encode_angle_to_vector=False, smooth_
         xt, yt, wt, lt, rt = torch.split(box_encodings, 1, dim=-1)
 
     # xt, yt, zt, wt, lt, ht, rt = torch.split(box_encodings, 1, dim=-1)
-    diagonal = torch.sqrt(la**2 + wa**2)
+    diagonal = torch.sqrt(la**2 + wa**2 + eps)
     xg = xt * diagonal + xa
     yg = yt * diagonal + ya
     if smooth_dim:

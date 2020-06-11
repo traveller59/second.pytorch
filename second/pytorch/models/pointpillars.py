@@ -119,8 +119,9 @@ class PillarFeatureNetOld(nn.Module):
 
         dtype = features.dtype
         # Find distance of x, y, and z from cluster center
-        points_mean = features[:, :, :3].sum(
-            dim=1, keepdim=True) / num_voxels.type_as(features).view(-1, 1, 1)
+        num_voxels_set_0_to_1 = num_voxels.clone()
+        num_voxels_set_0_to_1[num_voxels_set_0_to_1==0] = 1
+        points_mean = features[:, :, :3].sum( dim=1, keepdim=True) / num_voxels_set_0_to_1.type_as(features).view(-1, 1, 1)
         f_cluster = features[:, :, :3] - points_mean
 
         # Find distance of x, y, and z from pillar center
@@ -205,8 +206,9 @@ class PillarFeatureNet(nn.Module):
 
         dtype = features.dtype
         # Find distance of x, y, and z from cluster center
-        points_mean = features[:, :, :3].sum(
-            dim=1, keepdim=True) / num_voxels.type_as(features).view(-1, 1, 1)
+        num_voxels_set_0_to_1 = num_voxels.clone()
+        num_voxels_set_0_to_1[num_voxels_set_0_to_1==0] = 1
+        points_mean = features[:, :, :3].sum( dim=1, keepdim=True) / num_voxels_set_0_to_1.type_as(features).view(-1, 1, 1)
         f_cluster = features[:, :, :3] - points_mean
 
         # Find distance of x, y, and z from pillar center
@@ -291,9 +293,9 @@ class PillarFeatureNetRadius(nn.Module):
         device = features.device
 
         dtype = features.dtype
-        # Find distance of x, y, and z from cluster center
-        points_mean = features[:, :, :3].sum(
-            dim=1, keepdim=True) / num_voxels.type_as(features).view(-1, 1, 1)
+        num_voxels_set_0_to_1 = num_voxels.clone()
+        num_voxels_set_0_to_1[num_voxels_set_0_to_1==0] = 1
+        points_mean = features[:, :, :3].sum( dim=1, keepdim=True) / num_voxels_set_0_to_1.type_as(features).view(-1, 1, 1)
         f_cluster = features[:, :, :3] - points_mean
 
         # Find distance of x, y, and z from pillar center
@@ -380,8 +382,9 @@ class PillarFeatureNetRadiusHeight(nn.Module):
 
         dtype = features.dtype
         # Find distance of x, y, and z from cluster center
-        points_mean = features[:, :, :3].sum(
-            dim=1, keepdim=True) / num_voxels.type_as(features).view(-1, 1, 1)
+        num_voxels_set_0_to_1 = num_voxels.clone()
+        num_voxels_set_0_to_1[num_voxels_set_0_to_1==0] = 1
+        points_mean = features[:, :, :3].sum( dim=1, keepdim=True) / num_voxels_set_0_to_1.type_as(features).view(-1, 1, 1)
         f_cluster = features[:, :, :3] - points_mean
         pp_min = features[:, :, 2:3].min(dim=1, keepdim=True)[0]
         pp_max = features[:, :, 2:3].max(dim=1, keepdim=True)[0]
