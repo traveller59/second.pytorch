@@ -41,7 +41,7 @@ def example_convert_to_torch(example, dtype=torch.float32,
                 v, dtype=torch.int32, device=device)
         elif k in ["anchors_mask"]:
             example_torch[k] = torch.tensor(
-                v, dtype=torch.uint8, device=device)
+                v, dtype=torch.bool, device=device)
         elif k == "calib":
             calib = {}
             for k1, v1 in v.items():
