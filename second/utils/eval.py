@@ -125,7 +125,7 @@ def bev_box_overlap(boxes, qboxes, criterion=-1, stable=True):
     return riou
 
 
-@numba.jit(nopython=True, parallel=True)
+@numba.jit(nopython=True)  # removed parallel=True as it produces warning
 def box3d_overlap_kernel(boxes,
                           qboxes,
                           rinc,
