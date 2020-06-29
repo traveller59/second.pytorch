@@ -125,7 +125,7 @@ def bev_box_overlap(boxes, qboxes, criterion=-1, stable=True):
     return riou
 
 
-@numba.jit(nopython=True, parallel=True)
+@numba.jit(nopython=True)  # removed parallel=True as it produces warning
 def box3d_overlap_kernel(boxes,
                           qboxes,
                           rinc,
@@ -701,7 +701,9 @@ def do_coco_style_eval(gt_annos,
     min_overlaps = np.zeros([10, *overlap_ranges.shape[1:]])
     for i in range(overlap_ranges.shape[1]):
         for j in range(overlap_ranges.shape[2]):
-            min_overlaps[:, i, j] = np.linspace(*overlap_ranges[:, i, j])
+            a, b, c = overlap_ranges[:, i, j] #extracting the three numbers
+            min_overlaps[:, i, j] = np.linspace(a, b, int(c)) #casting to integer
+            # min_overlaps[:, i, j] = np.linspace(*overlap_ranges[:, i, j])
     mAP_bbox, mAP_bev, mAP_3d, mAP_aos = do_eval_v2(
         gt_annos,
         dt_annos,

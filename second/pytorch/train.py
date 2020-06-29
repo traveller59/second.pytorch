@@ -41,7 +41,7 @@ def example_convert_to_torch(example, dtype=torch.float32,
                 v, dtype=torch.int32, device=device)
         elif k in ["anchors_mask"]:
             example_torch[k] = torch.tensor(
-                v, dtype=torch.uint8, device=device)
+                v, dtype=torch.bool, device=device)
         elif k == "calib":
             calib = {}
             for k1, v1 in v.items():
@@ -409,6 +409,10 @@ def train(config_path,
                         model_logging.log_text("Evaluation {}".format(k), global_step)
                         model_logging.log_text(v, global_step)
                     model_logging.log_metrics(result_dict["detail"], global_step)
+                    with open(result_path_step / "result_dict.json" , "w") as f:
+                        json.dump(result_dict, f)
+                    with open(result_path_step / "result_dict.pkl", 'wb') as f:
+                        pickle.dump(result_dict, f)
                     with open(result_path_step / "result.pkl", 'wb') as f:
                         pickle.dump(detections, f)
                     net.train()
@@ -418,6 +422,7 @@ def train(config_path,
             if step >= total_step:
                 break
     except Exception as e:
+        print(f"Exception in step {step}, {str(e)}")
         print(json.dumps(example["metadata"], indent=2))
         model_logging.log_text(str(e), step)
         model_logging.log_text(json.dumps(example["metadata"], indent=2), step)
@@ -540,6 +545,10 @@ def evaluate(config_path,
     result_dict = eval_dataset.dataset.evaluation(detections,
                                                   str(result_path_step))
     if result_dict is not None:
+        with open(result_path_step / "result_dict.json" , "w") as f:
+            json.dump(result_dict, f)
+        with open(result_path_step / "result_dict.pkl", 'wb') as f:
+            pickle.dump(result_dict, f)
         for k, v in result_dict["results"].items():
             print("Evaluation {}".format(k))
             print(v)
