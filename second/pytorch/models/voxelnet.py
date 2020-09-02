@@ -355,6 +355,7 @@ class VoxelNet(nn.Module):
             voxels = torch.cat(voxel_list, dim=0)
             num_points = torch.cat(num_points_list, dim=0)
             coors = torch.cat(coors_list, dim=0)
+            coors[:, 0] -= coors[:, 0].min()
         batch_anchors = example["anchors"]
         batch_size_dev = batch_anchors.shape[0]
         # features: [num_voxels, max_num_points_per_voxel, 7]
