@@ -3,11 +3,13 @@ import pickle
 import time
 from functools import partial
 
+import cv2
 import numpy as np
 
 from second.core import box_np_ops
 from second.core import preprocess as prep
 from second.data import kitti_common as kitti
+from second.data import exr_utils as exr_utils
 from second.utils.eval import get_coco_eval_result, get_official_eval_result
 from second.data.dataset import Dataset, register_dataset
 from second.utils.progress_bar import progress_bar_iter as prog_bar
@@ -21,13 +23,14 @@ class KittiDataset(Dataset):
                  info_path,
                  class_names=None,
                  prep_func=None,
-                 num_point_features=None):
+                 num_point_features=None,
+                 use_stereo_disp=False):
         assert info_path is not None
         with open(info_path, 'rb') as f:
             infos = pickle.load(f)
         self._root_path = Path(root_path)
         self._kitti_infos = infos
-
+        self._use_stereo_disp = use_stereo_disp
         print("remain number of infos:", len(self._kitti_infos))
         self._class_names = class_names
         self._prep_func = prep_func
@@ -111,7 +114,7 @@ class KittiDataset(Dataset):
         detection
         When you want to eval your own dataset, you MUST set correct
         the z axis and box z center.
-        If you want to eval by my KITTI eval function, you must 
+        If you want to eval by my KITTI eval function, you must
         provide the correct format annotations.
         ground_truth_annotations format:
         {
@@ -395,32 +398,102 @@ def create_kitti_info_file(data_path, save_path=None, relative_path=True):
         pickle.dump(kitti_infos_test, f)
 
 
+def _read_calib(calib_path):
+    with open(calib_path, "r") as f:
+        calib = f.readlines()
+    P2 = calib[2].split()
+    assert P2[0] == "P2:"
+    P2 = [float(x) for x in P2[1:]]
+    P3 = calib[3].split()
+    assert P3[0] == "P3:"
+    P3 = [float(x) for x in P3[1:]]
+    K = np.array(P2).reshape([3, 4])
+    baseline = (P2[3] - P3[3]) / K[0, 0]
+    focal_x = K[0, 0]
+    focal_y = K[1, 1]
+    center_x = K[0, 2]
+    center_y = K[1, 2]
+    return baseline, focal_x, focal_y, center_x, center_y
+
+def _homogeneous_coords(
+    width, height, focal_length, optical_center_x, optical_center_y
+):
+    """homogeneous coordinates that have same shape as image"""
+
+    positional_coord_x, positional_coord_y = _generate_coords(width=width, height=height)
+    positional_coord_x = positional_coord_x
+    positional_coord_y = positional_coord_y
+    homogeneous_coord_x = (positional_coord_x - optical_center_x) / focal_length
+    homogeneous_coord_y = (positional_coord_y - optical_center_y) / focal_length
+    return homogeneous_coord_x, homogeneous_coord_y
+
+
+def _generate_coords(width, height):
+    """generate coordinates given by width and height"""
+
+    positional_coord_x = np.expand_dims(np.arange(width), [0, 1, 2])
+    positional_coord_x = np.tile(positional_coord_x, [1, 1, height, 1]).astype(np.float32)
+
+    positional_coord_y = np.expand_dims(np.arange(height), [0, 1, 3])
+    positional_coord_y = np.tile(positional_coord_y, [1, 1, 1, width]).astype(np.float32)
+
+    return positional_coord_x, positional_coord_y
+
+
+
+
 def _create_reduced_point_cloud(data_path,
                                 info_path,
                                 save_path=None,
-                                back=False):
+                                back=False,
+                                use_disparity=False):
     with open(info_path, 'rb') as f:
         kitti_infos = pickle.load(f)
     for info in prog_bar(kitti_infos):
         pc_info = info["point_cloud"]
         image_info = info["image"]
         calib = info["calib"]
+        if use_disparity:
+            camera_params = calib['camera_params']
+            disp_path = pc_info['disparity_path']
+            disp_path = Path(data_path) / disp_path
+            # todo: load disparity from exr and convert to point clouds
+            disp = exr_utils.load(v_path)
+            h, w = disp.shape
+            xs, ys = _homogeneous_coords(
+                w,
+                h,
+                focal_length=camera_params['focal_x'],
+                optical_center_x=camera_params['center_x'],
+                optical_center_y=camera_params['center_y'],
+            )
+            valid_idx = disp > 0
+            zs = camera_params['focal_x']*camera_params['baseline'] / disp[valid_idx]
+            xs = xs[valid_idx]*zs
+            ys = ys[valid_idx]*zs
+            # pick g channel
+            bgr = cv2.imread(str(pc_info["image_path"]))
+            g = bgr[:, :, 1]
+            gs = g[valid_idx]
 
-        v_path = pc_info['velodyne_path']
-        v_path = Path(data_path) / v_path
-        points_v = np.fromfile(
-            str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
-        rect = calib['R0_rect']
-        P2 = calib['P2']
-        Trv2c = calib['Tr_velo_to_cam']
-        # first remove z < 0 points
-        # keep = points_v[:, -1] > 0
-        # points_v = points_v[keep]
-        # then remove outside.
-        if back:
-            points_v[:, 0] = -points_v[:, 0]
-        points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
-                                                    image_info["image_shape"])
+            points_v = np.hstack([xs, ys, zs, gs])
+
+        else:
+            v_path = pc_info['velodyne_path']
+            v_path = Path(data_path) / v_path
+            points_v = np.fromfile(
+                str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
+            rect = calib['R0_rect']
+            P2 = calib['P2']
+            Trv2c = calib['Tr_velo_to_cam']
+            # first remove z < 0 points
+            # keep = points_v[:, -1] > 0
+            # points_v = points_v[keep]
+            # then remove outside.
+            if back:
+                points_v[:, 0] = -points_v[:, 0]
+            points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
+                                                        image_info["image_shape"])
         if save_path is None:
             save_filename = v_path.parent.parent / (
                 v_path.parent.stem + "_reduced") / v_path.name

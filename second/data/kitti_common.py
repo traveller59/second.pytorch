@@ -85,8 +85,10 @@ def get_kitti_info_path(idx,
                         file_tail='.png',
                         training=True,
                         relative_path=True,
-                        exist_check=True):
+                        exist_check=True,
+                        file_prefix=""):
     img_idx_str = get_image_index_str(idx)
+    img_idx_str = file_prefix + img_idx_str
     img_idx_str += file_tail
     prefix = pathlib.Path(prefix)
     if training:
@@ -112,6 +114,10 @@ def get_label_path(idx, prefix, training=True, relative_path=True, exist_check=T
 def get_velodyne_path(idx, prefix, training=True, relative_path=True, exist_check=True):
     return get_kitti_info_path(idx, prefix, 'velodyne', '.bin', training,
                                relative_path, exist_check)
+
+def get_disparity_path(idx, prefix, training=True, relative_path=True, exist_check=True):
+    return get_kitti_info_path(idx, prefix, 'disparity','.exr', training,
+                               relative_path, exist_check, file_prefix="disp_x_")
 
 def get_calib_path(idx, prefix, training=True, relative_path=True, exist_check=True):
     return get_kitti_info_path(idx, prefix, 'calib', '.txt', training,
@@ -162,7 +168,7 @@ def get_kitti_image_info(path,
                          relative_path=True,
                          with_imageshape=True):
     # image_infos = []
-    """ 
+    """
     KITTI annotation format version 2:
     {
         [optional]points: [N, 3+] point cloud
@@ -204,6 +210,10 @@ def get_kitti_image_info(path,
         if velodyne:
             pc_info['velodyne_path'] = get_velodyne_path(
                 idx, path, training, relative_path)
+            pc_info['disparity_path'] = get_disparity_path(
+                idx, path, training, relative_path
+            )
+
         image_info['image_path'] = get_image_path(idx, path, training,
                                                 relative_path)
         if with_imageshape:
@@ -250,7 +260,7 @@ def get_kitti_image_info(path,
                 rect_4x4[:3, :3] = R0_rect
             else:
                 rect_4x4 = R0_rect
-            
+
             Tr_velo_to_cam = np.array([
                 float(info) for info in lines[5].split(' ')[1:13]
             ]).reshape([3, 4])
@@ -260,6 +270,21 @@ def get_kitti_image_info(path,
             if extend_matrix:
                 Tr_velo_to_cam = _extend_matrix(Tr_velo_to_cam)
                 Tr_imu_to_velo = _extend_matrix(Tr_imu_to_velo)
+            # read camera metrix
+            camera_p2 = lines[2].split()
+            assert camera_p2[0] == "P2:"
+            camera_p2 = [float(x) for x in camera_p2[1:]]
+            camera_p3 = lines[3].split()
+            assert camera_p3[0] == "P3:"
+            camera_p3 = [float(x) for x in P3[1:]]
+            K = np.array(camera_p2).reshape([3, 4])
+            camera_params = {
+                'baseline': (camera_p2[3] - camera_p3[3]) / K[0, 0],
+                'focal_x': K[0, 0],
+                'focal_y': K[1, 1],
+                'center_x': K[0, 2],
+                'center_y': K[1, 2]
+            }
             calib_info['P0'] = P0
             calib_info['P1'] = P1
             calib_info['P2'] = P2
@@ -267,8 +292,9 @@ def get_kitti_image_info(path,
             calib_info['R0_rect'] = rect_4x4
             calib_info['Tr_velo_to_cam'] = Tr_velo_to_cam
             calib_info['Tr_imu_to_velo'] = Tr_imu_to_velo
+            calib_info['camera_params'] = camera_params
             info["calib"] = calib_info
-        
+
         if annotations is not None:
             info['annos'] = annotations
             add_difficulty_to_annos(info)
