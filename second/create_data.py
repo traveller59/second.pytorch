@@ -8,9 +8,9 @@ import second.data.kitti_dataset as kitti_ds
 import second.data.nuscenes_dataset as nu_ds
 from second.data.all_dataset import create_groundtruth_database
 
-def kitti_data_prep(root_path):
+def kitti_data_prep(root_path, use_disparity=False):
     kitti_ds.create_kitti_info_file(root_path)
-    kitti_ds.create_reduced_point_cloud(root_path)
+    kitti_ds.create_reduced_point_cloud(root_path, use_disparity=use_disparity)
     create_groundtruth_database("KittiDataset", root_path, Path(root_path) / "kitti_infos_train.pkl")
 
 def nuscenes_data_prep(root_path, version, dataset_name, max_sweeps=10):
