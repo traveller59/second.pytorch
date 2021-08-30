@@ -348,7 +348,7 @@ def create_kitti_info_file(data_path, save_path=None, relative_path=True):
     imageset_folder = Path(__file__).resolve().parent / "ImageSets"
     train_img_ids = _read_imageset_file(str(imageset_folder / "train.txt"))
     val_img_ids = _read_imageset_file(str(imageset_folder / "val.txt"))
-    test_img_ids = _read_imageset_file(str(imageset_folder / "test.txt"))
+    test_img_ids = _read_imageset_file(str(imageset_folder / "test_short.txt"))
 
     print("Generate info. this may take several minutes.")
     if save_path is None:
