@@ -458,7 +458,7 @@ def _create_reduced_point_cloud(data_path,
             disp_path = pc_info['disparity_path']
             disp_path = Path(data_path) / disp_path
             # todo: load disparity from exr and convert to point clouds
-            disp = exr_utils.load(v_path)
+            disp = exr_utils.load(disp_path)
             h, w = disp.shape
             xs, ys = _homogeneous_coords(
                 w,
