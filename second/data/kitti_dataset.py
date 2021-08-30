@@ -467,6 +467,8 @@ def _create_reduced_point_cloud(data_path,
                 optical_center_x=camera_params['center_x'],
                 optical_center_y=camera_params['center_y'],
             )
+            xs = np.squeeze(xs)
+            ys = np.squeeze(ys)
             valid_idx = disp > 0
             zs = camera_params['focal_x']*camera_params['baseline'] / disp[valid_idx]
             xs = xs[valid_idx]*zs
