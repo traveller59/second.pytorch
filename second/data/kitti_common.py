@@ -276,7 +276,7 @@ def get_kitti_image_info(path,
             camera_p2 = [float(x) for x in camera_p2[1:]]
             camera_p3 = lines[3].split()
             assert camera_p3[0] == "P3:"
-            camera_p3 = [float(x) for x in P3[1:]]
+            camera_p3 = [float(x) for x in camera_p3[1:]]
             K = np.array(camera_p2).reshape([3, 4])
             camera_params = {
                 'baseline': (camera_p2[3] - camera_p3[3]) / K[0, 0],
