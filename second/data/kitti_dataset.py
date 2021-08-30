@@ -432,10 +432,10 @@ def _generate_coords(width, height):
     """generate coordinates given by width and height"""
 
     positional_coord_x = np.expand_dims(np.arange(width), [0, 1, 2])
-    positional_coord_x = np.tile(positional_coord_x, [1, 1, height, 1]).astype(np.float32)
+    positional_coord_x = np.tile(positional_coord_x, [height, 1]).astype(np.float32)
 
     positional_coord_y = np.expand_dims(np.arange(height), [0, 1, 3])
-    positional_coord_y = np.tile(positional_coord_y, [1, 1, 1, width]).astype(np.float32)
+    positional_coord_y = np.tile(positional_coord_y, [1, width]).astype(np.float32)
 
     return positional_coord_x, positional_coord_y
 
