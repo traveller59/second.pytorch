@@ -479,7 +479,7 @@ def _create_reduced_point_cloud(data_path,
             g = bgr[:, :, 1]
             gs = g[valid_idx]/255.0
 
-            points_v = np.hstack([xs.reshape((-1,1)), ys.reshape((-1,1)), zs.reshape((-1,1)), gs.reshape((-1,1))])
+            points_v = np.hstack([ zs.reshape((-1,1)), xs.reshape((-1,1)), -ys.reshape((-1,1)),gs.reshape((-1,1))])
 
         else:
             v_path = Path(data_path) / v_path
