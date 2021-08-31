@@ -474,7 +474,7 @@ def _create_reduced_point_cloud(data_path,
             xs = xs[valid_idx]*zs
             ys = ys[valid_idx]*zs
             # pick g channel
-            bgr = cv2.imread(str(pc_info["image_path"]))
+            bgr = cv2.imread(str(Path(data_path) / image_info["image_path"]))
             g = bgr[:, :, 1]
             gs = g[valid_idx]
 
