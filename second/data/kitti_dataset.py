@@ -483,8 +483,8 @@ def _create_reduced_point_cloud(data_path,
             g = bgr[:, :, 1]
             # make reflections visible in viewer
             gs = (g[valid_idx]+255.0)/2/255.0
-
-            points_v = np.hstack([ zs.reshape((-1,1)), xs.reshape((-1,1)), -ys.reshape((-1,1)),gs.reshape((-1,1))])
+            gs[:] = 1.0
+            points_v = np.hstack([ zs.reshape((-1,1)), ys.reshape((-1,1)), -xs.reshape((-1,1)),gs.reshape((-1,1))])
 
         else:
             points_v = np.fromfile(
