@@ -467,8 +467,9 @@ def _create_reduced_point_cloud(data_path,
             # make reflections visible in viewer
             gs = (g[valid_idx]+255.0)/2/255.0
             gs[:] = 1.0
-            points_c = np.hstack([ xs.reshape((-1,1)), ys.reshape((-1,1)), zs.reshape((-1,1)),gs.reshape((-1,1))])
+            points_c = np.hstack([ xs.reshape((-1,1)), ys.reshape((-1,1)), zs.reshape((-1,1))])
             points_v = box_np_ops.camera_to_lidar(points_c, rect, Trv2c)
+            points_v = np.hstack([points_v, gs.reshape((-1,1))])
         else:
             points_v = np.fromfile(
                 str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
