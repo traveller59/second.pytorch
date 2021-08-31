@@ -398,23 +398,6 @@ def create_kitti_info_file(data_path, save_path=None, relative_path=True):
         pickle.dump(kitti_infos_test, f)
 
 
-def _read_calib(calib_path):
-    with open(calib_path, "r") as f:
-        calib = f.readlines()
-    P2 = calib[2].split()
-    assert P2[0] == "P2:"
-    P2 = [float(x) for x in P2[1:]]
-    P3 = calib[3].split()
-    assert P3[0] == "P3:"
-    P3 = [float(x) for x in P3[1:]]
-    K = np.array(P2).reshape([3, 4])
-    baseline = (P2[3] - P3[3]) / K[0, 0]
-    focal_x = K[0, 0]
-    focal_y = K[1, 1]
-    center_x = K[0, 2]
-    center_y = K[1, 2]
-    return baseline, focal_x, focal_y, center_x, center_y
-
 def _homogeneous_coords(
     width, height, focal_length, optical_center_x, optical_center_y
 ):
@@ -484,8 +467,8 @@ def _create_reduced_point_cloud(data_path,
             # make reflections visible in viewer
             gs = (g[valid_idx]+255.0)/2/255.0
             gs[:] = 1.0
-            points_v = np.hstack([ zs.reshape((-1,1)), ys.reshape((-1,1)), -xs.reshape((-1,1)),gs.reshape((-1,1))])
-
+            points_c = np.hstack([ xs.reshape((-1,1)), ys.reshape((-1,1)), zs.reshape((-1,1)),gs.reshape((-1,1))])
+            points_v = box_np_ops.camera_to_lidar(points_c, rect, Trv2c)
         else:
             points_v = np.fromfile(
                 str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
