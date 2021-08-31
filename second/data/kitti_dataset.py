@@ -346,8 +346,8 @@ def _calculate_num_points_in_gt(data_path,
 
 def create_kitti_info_file(data_path, save_path=None, relative_path=True):
     imageset_folder = Path(__file__).resolve().parent / "ImageSets"
-    train_img_ids = _read_imageset_file(str(imageset_folder / "train_debug.txt"))
-    val_img_ids = _read_imageset_file(str(imageset_folder / "val_debug.txt"))
+    train_img_ids = _read_imageset_file(str(imageset_folder / "train.txt"))
+    val_img_ids = _read_imageset_file(str(imageset_folder / "val.txt"))
     test_img_ids = _read_imageset_file(str(imageset_folder / "test_debug.txt"))
 
     print("Generate info. this may take several minutes.")
@@ -465,14 +465,14 @@ def _create_reduced_point_cloud(data_path,
             bgr = cv2.imread(str(Path(data_path) / image_info["image_path"]))
             g = bgr[:, :, 1]
             # make reflections visible in viewer
-            gs = (g[valid_idx]+255.0)/2/255.0
-            gs[:] = 1.0
+            gs = g[valid_idx]/255.0
             points_c = np.hstack([ xs.reshape((-1,1)), ys.reshape((-1,1)), zs.reshape((-1,1))])
             points_v = box_np_ops.camera_to_lidar(points_c, rect, Trv2c)
-            points_v = np.hstack([points_v, gs.reshape((-1,1))])
-            points_t = np.fromfile(
-                str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
-            points_v = np.vstack((points_v, points_t))
+            points_v = np.hstack([points_v, gs.reshape((-1,1))]).astype(np.float32)
+            # points_t = np.fromfile(
+            #     str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
+            # # points_v = points_t
+            # points_v = np.vstack((points_v[0:1,:], points_t)).astype(np.float32)
         else:
             points_v = np.fromfile(
                 str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
