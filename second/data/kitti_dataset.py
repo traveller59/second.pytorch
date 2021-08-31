@@ -452,6 +452,7 @@ def _create_reduced_point_cloud(data_path,
     for info in prog_bar(kitti_infos):
         pc_info = info["point_cloud"]
         v_path = pc_info['velodyne_path']
+        v_path = Path(data_path) / v_path
         image_info = info["image"]
         calib = info["calib"]
         if use_disparity:
@@ -482,7 +483,6 @@ def _create_reduced_point_cloud(data_path,
             points_v = np.hstack([ zs.reshape((-1,1)), xs.reshape((-1,1)), -ys.reshape((-1,1)),gs.reshape((-1,1))])
 
         else:
-            v_path = Path(data_path) / v_path
             points_v = np.fromfile(
                 str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
             rect = calib['R0_rect']
