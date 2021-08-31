@@ -455,6 +455,9 @@ def _create_reduced_point_cloud(data_path,
         v_path = Path(data_path) / v_path
         image_info = info["image"]
         calib = info["calib"]
+        rect = calib['R0_rect']
+        P2 = calib['P2']
+        Trv2c = calib['Tr_velo_to_cam']
         if use_disparity:
             camera_params = calib['camera_params']
             disp_path = pc_info['disparity_path']
@@ -486,17 +489,14 @@ def _create_reduced_point_cloud(data_path,
         else:
             points_v = np.fromfile(
                 str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
-            rect = calib['R0_rect']
-            P2 = calib['P2']
-            Trv2c = calib['Tr_velo_to_cam']
             # first remove z < 0 points
             # keep = points_v[:, -1] > 0
             # points_v = points_v[keep]
             # then remove outside.
             if back:
                 points_v[:, 0] = -points_v[:, 0]
-            points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
-                                                        image_info["image_shape"])
+        points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
+                                                    image_info["image_shape"])
         if save_path is None:
             save_filename = v_path.parent.parent / (
                 v_path.parent.stem + "_reduced") / v_path.name
