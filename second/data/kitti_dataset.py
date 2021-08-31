@@ -344,7 +344,7 @@ def _calculate_num_points_in_gt(data_path,
         annos["num_points_in_gt"] = num_points_in_gt.astype(np.int32)
 
 
-def create_kitti_info_file(data_path, save_path=None, relative_path=True):
+def create_kitti_info_file(data_path, save_path=None, relative_path=True, remove_outside=True):
     imageset_folder = Path(__file__).resolve().parent / "ImageSets"
     train_img_ids = _read_imageset_file(str(imageset_folder / "train.txt"))
     val_img_ids = _read_imageset_file(str(imageset_folder / "val.txt"))
@@ -362,7 +362,7 @@ def create_kitti_info_file(data_path, save_path=None, relative_path=True):
         calib=True,
         image_ids=train_img_ids,
         relative_path=relative_path)
-    _calculate_num_points_in_gt(data_path, kitti_infos_train, relative_path)
+    _calculate_num_points_in_gt(data_path, kitti_infos_train, relative_path, remove_outside=remove_outside)
     filename = save_path / 'kitti_infos_train.pkl'
     print(f"Kitti info train file is saved to {filename}")
     with open(filename, 'wb') as f:
@@ -374,7 +374,7 @@ def create_kitti_info_file(data_path, save_path=None, relative_path=True):
         calib=True,
         image_ids=val_img_ids,
         relative_path=relative_path)
-    _calculate_num_points_in_gt(data_path, kitti_infos_val, relative_path)
+    _calculate_num_points_in_gt(data_path, kitti_infos_val, relative_path, remove_outside=remove_outside)
     filename = save_path / 'kitti_infos_val.pkl'
     print(f"Kitti info val file is saved to {filename}")
     with open(filename, 'wb') as f:
@@ -423,8 +423,6 @@ def _generate_coords(width, height):
     return positional_coord_x, positional_coord_y
 
 
-
-
 def _create_reduced_point_cloud(data_path,
                                 info_path,
                                 save_path=None,
@@ -469,10 +467,8 @@ def _create_reduced_point_cloud(data_path,
             points_c = np.hstack([ xs.reshape((-1,1)), ys.reshape((-1,1)), zs.reshape((-1,1))])
             points_v = box_np_ops.camera_to_lidar(points_c, rect, Trv2c)
             points_v = np.hstack([points_v, gs.reshape((-1,1))]).astype(np.float32)
-            # points_t = np.fromfile(
-            #     str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
-            # # points_v = points_t
-            # points_v = np.vstack((points_v[0:1,:], points_t)).astype(np.float32)
+            # downsample point clouds density
+            points_v = points_v[0::4, ...]
         else:
             points_v = np.fromfile(
                 str(v_path), dtype=np.float32, count=-1).reshape([-1, 4])
@@ -482,8 +478,8 @@ def _create_reduced_point_cloud(data_path,
             # then remove outside.
             if back:
                 points_v[:, 0] = -points_v[:, 0]
-        points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
-                                                    image_info["image_shape"])
+            points_v = box_np_ops.remove_outside_points(points_v, rect, Trv2c, P2,
+                                                        image_info["image_shape"])
         if save_path is None:
             save_filename = v_path.parent.parent / (
                 v_path.parent.stem + "_reduced") / v_path.name
