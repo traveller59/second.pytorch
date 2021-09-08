@@ -461,7 +461,7 @@ def _create_reduced_point_cloud(data_path,
             ys = ys[valid_idx]*zs
             # pick g channel
             bgr = cv2.imread(str(Path(data_path) / image_info["image_path"]))
-            g = bgr[:, :, 1]
+            g = bgr[:, :, 2]
             # make reflections visible in viewer
             gs = g[valid_idx]/255.0
             points_c = np.hstack([ xs.reshape((-1,1)), ys.reshape((-1,1)), zs.reshape((-1,1))])
