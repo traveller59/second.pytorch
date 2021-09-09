@@ -16,7 +16,7 @@ from second.utils.progress_bar import progress_bar_iter as prog_bar
 
 @register_dataset
 class KittiDataset(Dataset):
-    NumPointFeatures = 4
+    NumPointFeatures = 6
 
     def __init__(self,
                  root_path,
@@ -461,12 +461,14 @@ def _create_reduced_point_cloud(data_path,
             ys = ys[valid_idx]*zs
             # pick g channel
             bgr = cv2.imread(str(Path(data_path) / image_info["image_path"]))
-            g = bgr[:, :, 1]
+            b = bgr[:, :, 0] / 255.0
+            g = bgr[:, :, 1] / 255.0
+            r = bgr[:, :, 2] / 255.0
             # make reflections visible in viewer
-            gs = g[valid_idx]/255.0
+            colors = np.hstack([b[valid_idx].reshape((-1,1)),g[valid_idx].reshape((-1,1)),r[valid_idx].reshape((-1,1))])
             points_c = np.hstack([ xs.reshape((-1,1)), ys.reshape((-1,1)), zs.reshape((-1,1))])
             points_v = box_np_ops.camera_to_lidar(points_c, rect, Trv2c)
-            points_v = np.hstack([points_v, gs.reshape((-1,1))]).astype(np.float32)
+            points_v = np.hstack([points_v, colors]).astype(np.float32)
             # downsample point clouds density
             points_v = points_v[0::4, ...]
         else:
