@@ -2,6 +2,7 @@
 import cv2
 import dataclasses
 import fire
+from pathlib import Path
 import numpy as np
 import pickle
 import math
@@ -85,40 +86,52 @@ def plot_box(bbox_3ds, rgb, K, output_path):
     for bbox_3d in bbox_3ds:
         rgb = draw_bbox3d(rgb, bbox_3d, K)
     cv2.imwrite(str(output_path), cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB))
-    print("output to ", output_path)
+    # print("output to ", output_path)
 
 def run():
     pkl_path = "/host/ssd/quan/data/tmp/kitti3d_second/disp_pp_xyres_20_models_rgb/results/step_296960/result.pkl"
-    rgb_path = "/host/ssd/quan/data/tmp/kitti3d_second/training/image_2/000008.png"
-    calib_path = "/host/ssd/quan/data/tmp/kitti3d_second/training/calib/000008.txt"
-    output_path = "/host/tmp/0000008_boxes.png"
+    # rgb_path = "/host/ssd/quan/data/tmp/kitti3d_second/training/image_2/000008.png"
+    # calib_path = "/host/ssd/quan/data/tmp/kitti3d_second/training/calib/000008.txt"
+    # output_path = "/host/tmp/0000008_boxes.png"
     xyz_hwl_r = [ 8.2277,  1.1708, -0.8107,  1.5976,  3.8149,  1.5407, -1.2763]
     with open(pkl_path, "rb") as fp:
         d = pickle.load(fp)
-    bboxes = d[5]
+
+    rgb_dir = Path("/host/ssd/quan/data/tmp/kitti3d_second/training/image_2")
+    calib_dir = Path("/host/ssd/quan/data/tmp/kitti3d_second/training/calib/")
+    output_dir = Path("/host/ssd/quan/data/tmp/kitti_results_cars")
 
     bbox_3ds = []
-    for xyz_hwl_r, score in zip(bboxes["box3d_lidar"], bboxes["scores"]):
-        if score < 0.25:
-            continue
-        bbox_3d = BBox3D(
-                    label="car",
-                    height=float(xyz_hwl_r[3]),
-                    width=float(xyz_hwl_r[5]),
-                    length=float(xyz_hwl_r[4]),
-                    x=-float(xyz_hwl_r[1]),
-                    y=-float(xyz_hwl_r[2])+float(xyz_hwl_r[3])/2,
-                    z=float(xyz_hwl_r[0]),
-                    yaw=float(xyz_hwl_r[6]) + math.pi / 2,
-                    pitch=0,
-                    roll=0,
-        )
-        bbox_3ds.append(bbox_3d)
+    for frame in d:
+        image_id = frame["metadata"]["image_idx"]
+        image_name = str(image_id).zfill(6)
+        rgb_path = rgb_dir / f"{image_name}.png"
+        calib_path = calib_dir / f"{image_name}.txt"
+        bbox_3ds = []
+        for xyz_hwl_r, score in zip(frame["box3d_lidar"], frame["scores"]):
+            if score < 0.35:
+                continue
+            bbox_3d = BBox3D(
+                        label="car",
+                        height=float(xyz_hwl_r[3]),
+                        width=float(xyz_hwl_r[5]),
+                        length=float(xyz_hwl_r[4]),
+                        x=-float(xyz_hwl_r[1]),
+                        y=-float(xyz_hwl_r[2])+float(xyz_hwl_r[3])/2,
+                        z=float(xyz_hwl_r[0]),
+                        yaw=float(xyz_hwl_r[6]) + math.pi / 2,
+                        pitch=0,
+                        roll=0,
+            )
+            bbox_3ds.append(bbox_3d)
 
-    K, baseline = read_calib(calib_path)
-    bgr = cv2.imread(str(rgb_path))
-    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-    plot_box(bbox_3ds, rgb, K, output_path)
+        K, baseline = read_calib(calib_path)
+        bgr = cv2.imread(str(rgb_path))
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        output_path = output_dir / f"{image_name}_boxes.png"
+        plot_box(bbox_3ds, rgb, K, output_path)
+        if image_id % 100 == 0:
+            print(f"finished {image_id+1} frames out of {len(d)} in {output_dir}")
 
 if __name__ == '__main__':
     run()
