@@ -1,11 +1,26 @@
 """project 3D kitti boxes to 2D"""
 import cv2
+import dataclasses
 import fire
-import logging
 import numpy as np
-from pathlib import Path
-from PIL import Image
+import pickle
+import math
 from scipy.spatial.transform import Rotation
+
+
+@dataclasses.dataclass
+class BBox3D:
+    label: str
+    x: float
+    y: float
+    z: float
+    yaw: float
+    pitch: float
+    roll: float
+    height: float
+    width: float
+    length: float
+    det_score: float = -1
 
 def apply_camera_matrix(camera_matrix, pts):
     if camera_matrix.shape[1] == 4:
@@ -66,21 +81,44 @@ def read_calib(calib_path):
     baseline = (P2[3] - P3[3]) / K[0, 0]
     return K, baseline
 
-def plot_box(xyz_hwl_r, rgb, K, output_path):
-    rgb_plot = draw_bbox3d(rgb, xyz_hwl_r, K)
-    cv2.imwrite(str(output_path), cv2.cvtColor(rgb_plot, cv2.COLOR_BGR2RGB))
-    print("output to %s", output_path)
+def plot_box(bbox_3ds, rgb, K, output_path):
+    for bbox_3d in bbox_3ds:
+        rgb = draw_bbox3d(rgb, bbox_3d, K)
+    cv2.imwrite(str(output_path), cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB))
+    print("output to ", output_path)
 
 def run():
     pkl_path = "/host/ssd/quan/data/tmp/kitti3d_second/disp_pp_xyres_20_models_rgb/results/step_296960/result.pkl"
     rgb_path = "/host/ssd/quan/data/tmp/kitti3d_second/training/image_2/000008.png"
     calib_path = "/host/ssd/quan/data/tmp/kitti3d_second/training/calib/000008.txt"
-    output_path = "/tmp/0000008_boxes.png"
+    output_path = "/host/tmp/0000008_boxes.png"
     xyz_hwl_r = [ 8.2277,  1.1708, -0.8107,  1.5976,  3.8149,  1.5407, -1.2763]
+    with open(pkl_path, "rb") as fp:
+        d = pickle.load(fp)
+    bboxes = d[5]
+
+    bbox_3ds = []
+    for xyz_hwl_r, score in zip(bboxes["box3d_lidar"], bboxes["scores"]):
+        if score < 0.25:
+            continue
+        bbox_3d = BBox3D(
+                    label="car",
+                    height=float(xyz_hwl_r[3]),
+                    width=float(xyz_hwl_r[5]),
+                    length=float(xyz_hwl_r[4]),
+                    x=-float(xyz_hwl_r[1]),
+                    y=-float(xyz_hwl_r[2])+float(xyz_hwl_r[3])/2,
+                    z=float(xyz_hwl_r[0]),
+                    yaw=float(xyz_hwl_r[6]) + math.pi / 2,
+                    pitch=0,
+                    roll=0,
+        )
+        bbox_3ds.append(bbox_3d)
+
     K, baseline = read_calib(calib_path)
     bgr = cv2.imread(str(rgb_path))
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-    plot_box(xyz_hwl_r, rgb, K, output_path)
+    plot_box(bbox_3ds, rgb, K, output_path)
 
 if __name__ == '__main__':
-    fire.Fire()
+    run()
