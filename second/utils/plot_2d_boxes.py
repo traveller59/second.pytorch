@@ -113,7 +113,9 @@ def run():
 
             if label == 0 and score < 0.35:
                 continue
-            elif label > 0 and score < 0.25:
+            elif label == 1 and score < 0.35:
+                continue
+            elif label == 2 and score < 0.15:
                 continue
             height_start = float(xyz_hwl_r[3])/2 if label ==0 else float(xyz_hwl_r[3])
             bbox_3d = BBox3D(
