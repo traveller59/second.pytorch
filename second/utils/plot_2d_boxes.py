@@ -133,7 +133,7 @@ def run():
         K, baseline = read_calib(calib_path)
         bgr = cv2.imread(str(rgb_path))
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-        output_path = output_dir / f"{image_name}_boxes.png"
+        output_path = output_dir / f"{image_name}_boxes.jpg"
         plot_box(bbox_3ds, rgb, K, output_path, colors)
         if image_id % 100 == 0:
             print(f"finished {image_id+1} frames out of {len(d)} in {output_dir}")
