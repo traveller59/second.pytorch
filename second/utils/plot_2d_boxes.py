@@ -48,10 +48,8 @@ def bbox3d_to_cv_points(bbox_3d, camera_matrix):
     center = apply_camera_matrix(camera_matrix, T.reshape([1, 3]))
     return pts, center[0]
 
-def draw_bbox3d(img, bbox_3d, K, taxonomy=None):
-    if taxonomy is not None and taxonomy.valid_class(bbox_3d.label):
-        color = taxonomy.label_color(bbox_3d.label)
-    else:
+def draw_bbox3d(img, bbox_3d, K, color=None):
+    if color is None:
         color = (255, 0, 0)
     corner_pts, center_pt = bbox3d_to_cv_points(bbox_3d, K)
     corner_pts = np.round(corner_pts).astype(np.int32)
@@ -82,14 +80,15 @@ def read_calib(calib_path):
     baseline = (P2[3] - P3[3]) / K[0, 0]
     return K, baseline
 
-def plot_box(bbox_3ds, rgb, K, output_path):
+def plot_box(bbox_3ds, rgb, K, output_path, colors):
     for bbox_3d in bbox_3ds:
-        rgb = draw_bbox3d(rgb, bbox_3d, K)
+        rgb = draw_bbox3d(rgb, bbox_3d, K, color=colors[bbox_3d.label])
     cv2.imwrite(str(output_path), cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB))
     # print("output to ", output_path)
 
 def run():
-    pkl_path = "/host/ssd/quan/data/tmp/kitti3d_second/disp_pp_xyres_20_models_rgb/results/step_296960/result.pkl"
+    pkl_path = "/host/ssd/quan/data/tmp/kitti3d_second/disp_rgb_3classes_model/results/step_296960/result.pkl"
+    # pkl_path = "/host/ssd/quan/data/tmp/kitti3d_second/disp_pp_xyres_20_models_rgb/results/step_296960/result.pkl"
     # rgb_path = "/host/ssd/quan/data/tmp/kitti3d_second/training/image_2/000008.png"
     # calib_path = "/host/ssd/quan/data/tmp/kitti3d_second/training/calib/000008.txt"
     # output_path = "/host/tmp/0000008_boxes.png"
@@ -102,26 +101,32 @@ def run():
     output_dir = Path("/host/ssd/quan/data/tmp/kitti_results_cars")
 
     bbox_3ds = []
+    class_names = ["car", "ped", "cyclist"]
+    colors = {"car": (255,0,0), "ped":(255, 255, 0), "cyclist":(0, 255,255)}
     for frame in d:
         image_id = frame["metadata"]["image_idx"]
         image_name = str(image_id).zfill(6)
         rgb_path = rgb_dir / f"{image_name}.png"
         calib_path = calib_dir / f"{image_name}.txt"
         bbox_3ds = []
-        for xyz_hwl_r, score in zip(frame["box3d_lidar"], frame["scores"]):
-            if score < 0.35:
+        for xyz_hwl_r, score, label in zip(frame["box3d_lidar"], frame["scores"],frame["label_preds"]):
+
+            if label == 0 and score < 0.35:
                 continue
+            elif label > 0 and score < 0.25:
+                continue
+            height_start = float(xyz_hwl_r[3])/2 if label ==0 else float(xyz_hwl_r[3])
             bbox_3d = BBox3D(
-                        label="car",
-                        height=float(xyz_hwl_r[3]),
-                        width=float(xyz_hwl_r[5]),
-                        length=float(xyz_hwl_r[4]),
-                        x=-float(xyz_hwl_r[1]),
-                        y=-float(xyz_hwl_r[2])+float(xyz_hwl_r[3])/2,
-                        z=float(xyz_hwl_r[0]),
-                        yaw=float(xyz_hwl_r[6]) + math.pi / 2,
-                        pitch=0,
-                        roll=0,
+                label=class_names[label],
+                height=float(xyz_hwl_r[5]),
+                width=float(xyz_hwl_r[3]),
+                length=float(xyz_hwl_r[4]),
+                x=-float(xyz_hwl_r[1]),
+                y=-float(xyz_hwl_r[2])+height_start,
+                z=float(xyz_hwl_r[0]),
+                yaw=float(xyz_hwl_r[6]) + math.pi / 2,
+                pitch=0,
+                roll=0,
             )
             bbox_3ds.append(bbox_3d)
 
@@ -129,9 +134,10 @@ def run():
         bgr = cv2.imread(str(rgb_path))
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         output_path = output_dir / f"{image_name}_boxes.png"
-        plot_box(bbox_3ds, rgb, K, output_path)
+        plot_box(bbox_3ds, rgb, K, output_path, colors)
         if image_id % 100 == 0:
             print(f"finished {image_id+1} frames out of {len(d)} in {output_dir}")
+
 
 if __name__ == '__main__':
     run()
