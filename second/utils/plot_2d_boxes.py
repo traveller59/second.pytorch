@@ -23,10 +23,10 @@ class BBox3D:
     length: float
     det_score: float = -1
 
-def apply_camera_matrix(camera_matrix, pts):
+def apply_camera_matrix(camera_matrix, pts_in):
     if camera_matrix.shape[1] == 4:
-        pts = np.concatenate([pts, np.ones([pts.shape[0], 1])], 1)
-    pts = np.matmul(camera_matrix, pts.T).T
+        pts_in = np.concatenate([pts_in, np.ones([pts_in.shape[0], 1])], 1)
+    pts = np.matmul(camera_matrix, pts_in.T).T
     pts = np.stack([pts[:, 0] / pts[:, 2], pts[:, 1] / pts[:, 2]], 1)
     return pts
 
@@ -117,7 +117,7 @@ def run():
                 continue
             elif label == 2 and score < 0.15:
                 continue
-            height_start = float(xyz_hwl_r[3])/2 if label ==0 else float(xyz_hwl_r[3])
+            height_start = float(xyz_hwl_r[5])/2
             bbox_3d = BBox3D(
                 label=class_names[label],
                 height=float(xyz_hwl_r[5]),
@@ -139,7 +139,6 @@ def run():
         plot_box(bbox_3ds, rgb, K, output_path, colors)
         if image_id % 100 == 0:
             print(f"finished {image_id+1} frames out of {len(d)} in {output_dir}")
-
 
 if __name__ == '__main__':
     run()
