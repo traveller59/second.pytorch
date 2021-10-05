@@ -1,5 +1,6 @@
 # To Run it on linux desktops
-docker image is saved at  /mnt/nas/quan/docker_images/ce_second_env.tar
+docker image is saved at  /mnt/nas/quan/docker_images/ce_second_env.tar. To launch the container:
+
 docker run -it --rm -v /host:/host nas1.rwc.compoundeye.com:6001/ce_second_env:latest bash
 conda activate second
 
