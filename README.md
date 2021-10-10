@@ -5,6 +5,8 @@ docker run -it --rm --ipc=host --net=host --gpus all -v /host:/host nas1.rwc.com
 
 conda activate second
 
+export PYTHONPATH=${PYTHONPATH}:/host/home/quan/Documents/code/second.pytorch
+
 # SECOND for KITTI/NuScenes object detection (1.6.0 Alpha)
 SECOND detector.
 
