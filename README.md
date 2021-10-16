@@ -1,11 +1,20 @@
 # To Run it on linux desktops
-docker image is saved at  /mnt/nas/quan/docker_images/ce_second_env.tar. To launch the container:
 
-docker run -it --rm --ipc=host --net=host --gpus all -v /host:/host nas1.rwc.compoundeye.com:6001/ce_second_env:latest bash
+The docker image is saved at `/mnt/nas/quan/docker_images/ce_second_env.tar`.
 
-conda activate second
+The image is also available in the registry. Get it by running:
 
-export PYTHONPATH=${PYTHONPATH}:/host/home/quan/Documents/code/second.pytorch
+```bash
+> docker pull nas1.rwc.compoundeye.com:6001/ce_second_env
+```
+
+To launch the container:
+
+``` bash
+> docker run -it --rm --ipc=host --net=host --gpus all -v /host:/host nas1.rwc.compoundeye.com:6001/ce_second_env:latest bash
+> conda activate second
+> export PYTHONPATH=${PYTHONPATH}:/host/home/quan/Documents/code/second.pytorch
+```
 
 # SECOND for KITTI/NuScenes object detection (1.6.0 Alpha)
 SECOND detector.
