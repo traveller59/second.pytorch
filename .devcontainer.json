@@ -1,0 +1,29 @@
+{
+  "containerEnv": {
+    "DISPLAY": "${env:DISPLAY}",
+    "GLOG_logtostderr": "1",
+    "PYTHONPATH": "/src"
+  },
+  "dockerFile": "./Dockerfile",
+  "extensions": [
+    "ms-vscode.cmake-tools",
+    "twxs.cmake",
+    "ms-python.python",
+    "ms-vscode.cpptools",
+    "ms-azuretools.vscode-docker"
+  ],
+  "mounts": ["source=/,target=/host,type=bind"],
+  "runArgs": [
+    "--init",
+    "--rm",
+    "-ti",
+    "--gpus=all",
+    "--cap-add=SYS_PTRACE",
+    "--ipc=host",
+    "--net=host",
+    "--security-opt",
+    "apparmor:unconfined"
+  ],
+  "workspaceFolder": "/src",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/src,type=bind,consistency=cached"
+}

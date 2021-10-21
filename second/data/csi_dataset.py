@@ -2,6 +2,7 @@
 from pathlib import Path
 import re
 
+import cv2
 from google.protobuf import text_format
 import lupa
 import numpy as np
@@ -33,15 +34,11 @@ def read_rig_calibration(cal_lua: Path):
 
 
 # tweaked version of kitti_dataset._create_reduced_point_cloud
-def point_cloud_from_image_and_disparity(bgr, disp, fx, cx, cy, baseline):
+def point_cloud_from_image_and_disparity(rgb, disp, fx, cx, cy, baseline):
     """Compute point cloud from image and disparity"""
     h, w = disp.shape
     xs, ys = _homogeneous_coords(
-        w,
-        h,
-        focal_length=fx,
-        optical_center_x=cx,
-        optical_center_y=cy,
+        w, h, focal_length=fx, optical_center_x=cx, optical_center_y=cy,
     )
     xs = np.squeeze(xs)
     ys = np.squeeze(ys)
@@ -50,10 +47,10 @@ def point_cloud_from_image_and_disparity(bgr, disp, fx, cx, cy, baseline):
     xs = xs[valid_idx] * zs
     ys = ys[valid_idx] * zs
 
-    # normalize color channels
-    b = bgr[:, :, 0] / 255.0
-    g = bgr[:, :, 1] / 255.0
-    r = bgr[:, :, 2] / 255.0
+    # individual color channels
+    r = rgb[:, :, 0]
+    g = rgb[:, :, 1]
+    b = rgb[:, :, 2]
     # make reflections visible in viewer
     colors = np.hstack(
         [
@@ -70,7 +67,7 @@ def point_cloud_from_image_and_disparity(bgr, disp, fx, cx, cy, baseline):
     return points
 
 
-def detect_bboxes(csi_path: Path, network_path: Path, network_config_path: Path):
+def detect_bboxes(csi_path: Path, checkpoint_path: Path, config_path: Path):
     # read calibration
     cal_file = csi_path / "calibration/rectified_calibration.lua"
     cal = read_rig_calibration(cal_file)
@@ -87,15 +84,14 @@ def detect_bboxes(csi_path: Path, network_path: Path, network_config_path: Path)
 
     # create network
     config = pipeline_pb2.TrainEvalPipelineConfig()
-    with open(network_config_path, "r") as f:
+    with open(config_path, "r") as f:
         proto_str = f.read()
         text_format.Merge(proto_str, config)
-    input_cfg = config.eval_input_reader
     model_cfg = config.model.second
     config_tool.change_detection_range(model_cfg, [-50, -50, 50, 50])
     device = torch.device("cuda")
     net = build_network(model_cfg).to(device).eval()
-    net.load_state_dict(torch.load(network_path))
+    net.load_state_dict(torch.load(checkpoint_path))
     target_assigner = net.target_assigner
     voxel_generator = net.voxel_generator
 
@@ -110,13 +106,15 @@ def detect_bboxes(csi_path: Path, network_path: Path, network_config_path: Path)
 
     # detect bboxes
     num_frames = disp_reader.total_frames
-    ix = 0
     for ix in range(num_frames):
         print(f"Processing frame {ix} of {num_frames}...")
 
         # load frame data
-        rgb = rgb_reader.get_frames(ix, 1).astype(np.float32) * (1.0 / 255.0)
-        disp = disp_reader.get_frames(ix, 1).astype(np.float32)
+        rgb = cv2.resize(
+            np.squeeze(rgb_reader.get_frames(ix, 1).astype(np.float32) * (1.0 / 255.0)),
+            (disp_reader.w, disp_reader.h),
+        )
+        disp = np.squeeze(disp_reader.get_frames(ix, 1).astype(np.float32))
 
         # process point cloud
         points = point_cloud_from_image_and_disparity(
@@ -124,7 +122,10 @@ def detect_bboxes(csi_path: Path, network_path: Path, network_config_path: Path)
         )
 
         # generate voxels
-        voxels, coords, num_points = voxel_generator.generate(points, max_voxels=90000)
+        voxel_dict = voxel_generator.generate(points, max_voxels=90000)
+        voxels = voxel_dict["voxels"]
+        coords = voxel_dict["coordinates"]
+        num_points = voxel_dict["num_points_per_voxel"]
         coords = np.pad(coords, ((0, 0), (1, 0)), mode="constant", constant_values=0)
         voxels = torch.tensor(voxels, dtype=torch.float32, device=device)
         coords = torch.tensor(coords, dtype=torch.int32, device=device)
@@ -137,13 +138,16 @@ def detect_bboxes(csi_path: Path, network_path: Path, network_config_path: Path)
             "num_points": num_points,
             "coordinates": coords,
         }
-        prediction = net(example)[0]
-        print(prediction)
+        with torch.no_grad():
+            prediction = net(example)[0]
+
+        boxes = prediction["box3d_lidar"].detach().cpu().numpy()
+        print(boxes)
 
 
 if __name__ == "__main__":
     detect_bboxes(
-        Path("/data/csi-stacks/csi-200306-414905"),
-        Path("/data/second/pp_disp_rgb_3classes_model/voxelnet-296960.tckpt"),
-        Path("/data/second/pp_disp_rgb_3classes_model/pipeline.config"),
+        Path("/host/data/csi-stacks/csi-200306-414905"),
+        Path("/host/data/second/pp_disp_rgb_3classes_model/voxelnet-296960.tckpt"),
+        Path("/host/data/second/pp_disp_rgb_3classes_model/pipeline.config"),
     )

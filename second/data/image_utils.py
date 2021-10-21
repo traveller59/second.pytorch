@@ -6,7 +6,6 @@ import pathlib
 import warnings
 import numpy as np
 from matplotlib import pyplot as plt
-from ml import constants
 
 IMAGE_UTILS_TYPE_SELECT = {
     "float": np.float32,
@@ -16,10 +15,11 @@ IMAGE_UTILS_TYPE_SELECT = {
     "char": np.int8,
 }
 
+
 def scale16_tform(x):
-    valid_mask = x!=constants.DISPARITY_IGNORE
-    x[valid_mask] = x[valid_mask].astype(float) * (1.0 / 16.0)
+    x = x.astype(float) * (1.0 / 16.0)
     return x
+
 
 IMAGE_UTILS_TFORM_SELECT = {
     "id": None,  # the identity function (the "do nothing" transform)
