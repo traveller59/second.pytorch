@@ -1,5 +1,8 @@
+# This Project is DEPRECATED, please use [OpenPCDet](https://github.com/open-mmlab/OpenPCDet) or [mmdetection3d](https://github.com/open-mmlab/mmdetection3d) instead, they both implement SECOND and support spconv 2.x.
+
 # SECOND for KITTI/NuScenes object detection (1.6.0 Alpha)
 SECOND detector.
+
 
 "Alpha" means there may be many bugs, config format may change, spconv API may change.
 
