@@ -112,9 +112,9 @@ If you want to use NuScenes dataset, you need to install [nuscenes-devkit](https
 you need to add following environment variable for numba.cuda, you can add them to ~/.bashrc:
 
 ```bash
-export NUMBAPRO_CUDA_DRIVER=/usr/lib/x86_64-linux-gnu/libcuda.so
-export NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
-export NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice
+export NUMBA_CUDA_DRIVER=/usr/lib/x86_64-linux-gnu/libcuda.so
+export NUMBA_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
+export NUMBA_LIBDEVICE=/usr/local/cuda/nvvm/libdevice
 ```
 
 ### 4. add second.pytorch/ to PYTHONPATH
